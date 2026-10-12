@@ -46,11 +46,13 @@ typedef Adafruit_SSD1351 displayType; // Using OLED display(s)
 
 // INPUT CONFIG (for eye motion -- enable or comment out as needed) --------
 
-#define TRACKING          // If enabled, eyelid tracks pupil
+//#define TRACKING        // If enabled, eyelid tracks pupil (off: lids stay open except when blinking)
 #define IRIS_SMOOTH       // If enabled, filter input from IRIS_PIN
 #define IRIS_MIN      150 // Clip lower analogRead() range from IRIS_PIN (WAS: 120) - Reduced range so that it doesn't look to odd with multiple eye pairs
 #define IRIS_MAX      400 // Clip upper "                                (WAS: 720) - Reduced range so that it doesn't look to odd with multiple eye pairs
 #define AUTOBLINK        // If enabled, eyes blink autonomously
+#define EYELID_COLOR 0x534A // RGB565 eyelid colour: muted Frankenstein green (80,104,80). 0x0000 = original black.
+                            // Lighter: 0x63CC (96,120,96)  Darker: 0x3A87 (60,80,60)
 
 // Probably don't need to edit any config below this line, -----------------
 // unless building a single-eye project (pendant, etc.), in which case one
@@ -147,7 +149,7 @@ void drawEye( // Renders one eye.  Inputs must be pre-clipped & valid.
       int effectiveX = e == 1 ? screenX : SCREEN_WIDTH - 1 - screenX;
       if((lower[screenY][effectiveX] <= lT) ||
          (upper[screenY][effectiveX] <= uT)) {             // Covered by eyelid
-        p = 0;
+        p = EYELID_COLOR;
       } else if((irisY < 0) || (irisY >= IRIS_HEIGHT) ||
                 (irisX < 0) || (irisX >= IRIS_WIDTH)) { // In sclera
         p = sclera[scleraY][scleraX];
