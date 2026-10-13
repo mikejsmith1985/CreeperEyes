@@ -25,6 +25,7 @@
 // The ESP32 has a lot of memory, so this works fine
 #include "defaultEye.h"        // Standard human-ish hazel eye
 #include "newtEye.h"           // Eye of newt
+#include "puppet.h"            // Radar-driven behaviour + DFPlayer sound
 
 const uint16_t (*sclera)[SCLERA_WIDTH] = scleraDefault;
 const uint8_t (*upper)[SCREEN_WIDTH] = upperDefault;
@@ -42,7 +43,6 @@ typedef Adafruit_SSD1351 displayType; // Using OLED display(s)
 #define DISPLAY_RESET   5 // Reset pin for BOTH displays
 #define SELECT_L_PIN    17 // LEFT eye chip select pin
 #define SELECT_R_PIN    04 // RIGHT eye chip select pin
-#define UART_RX_PIN     13 // Pin to receive UART commands from controller
 
 // INPUT CONFIG (for eye motion -- enable or comment out as needed) --------
 
@@ -86,13 +86,10 @@ struct {
 
 // INITIALIZATION -- runs once at startup ----------------------------------
 
-HardwareSerial SerialIn(1);
-
 void setup(void) {
   uint8_t e;
 
   Serial.begin(921600);
-  // SerialIn.begin(9600, SERIAL_8N1, UART_RX_PIN); // disabled
   randomSeed(analogRead(A3)); // Seed random() from floating analog input
 
   // Both displays share a common reset line; 0 is passed to display
@@ -110,6 +107,8 @@ void setup(void) {
     eye[e].display.begin();
     digitalWrite(eye[e].cs, HIGH); // Deselect
   }
+
+  puppetSetup();                   // radar + sound (falls back to normal eyes if radar absent)
   
   // One of the displays is configured to mirror on the X axis.  Simplifies
   // eyelid handling in the drawEye() function -- no need for distinct
@@ -222,6 +221,8 @@ void frame( // Process motion for a single frame of left or right eye
   static uint16_t serEyeCtrl = 0;
 
   if(++eyeIndex >= NUM_EYES) eyeIndex = 0; // Cycle through eyes, 1 per call
+  if(eyeIndex == 0) puppetUpdate(micros());   // radar/sound behaviour, once per eye pair
+  { int16_t io = puppetIris(); if(io >= 0) iScale = io; }
 
   // X/Y movement
 
@@ -272,6 +273,14 @@ void frame( // Process motion for a single frame of left or right eye
       eyeInMotion      = true;            // Start move on next frame
     }
   }
+  { // Radar gaze override: when someone is tracked the eyes follow them.
+    int16_t gx, gy;
+    if(puppetGaze(&gx, &gy)) {
+      eyeX = eyeOldX = eyeNewX = gx;            // keep autonomous state in sync so it
+      eyeY = eyeOldY = eyeNewY = gy;            // resumes smoothly when override ends
+      eyeInMotion = false; eyeMoveStartTime = t; eyeMoveDuration = 1500000;
+    }
+  }
   eyeCurX = eyeX;
   eyeCurY = eyeY;
   
@@ -279,7 +288,7 @@ void frame( // Process motion for a single frame of left or right eye
 #ifdef AUTOBLINK
   // Similar to the autonomous eye movement above -- blink start times
   // and durations are random (within ranges).
-  if((t - timeOfLastBlink) >= timeToNextBlink) { // Start new blink?
+  if(puppetAllowBlink() && (t - timeOfLastBlink) >= timeToNextBlink) { // Start new blink?
     timeOfLastBlink = t;
     uint32_t blinkDuration = random(36000, 72000); // ~1/28 - ~1/14 sec
     // Set up durations for both eyes (if not already winking)
@@ -361,6 +370,13 @@ void frame( // Process motion for a single frame of left or right eye
     lThreshold = (lThreshold * s + 254 * (257 - s)) / 256;
   } else {
     n          = uThreshold;
+  }
+
+  // Extra lid closure from the behaviour module (sleeping, waking).
+  uint8_t lc = puppetLidClose();
+  if(lc) {
+    n          = n          + ((254 - n)          * lc) / 255;
+    lThreshold = lThreshold + ((254 - lThreshold) * lc) / 255;
   }
 
   // Pass all the derived values to the eye-rendering function:
