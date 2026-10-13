@@ -1,0 +1,197 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>CreeperEyes Installer</title>
+<meta name="description" content="Animated, radar-tracking monster eyes for an ESP32. Install the firmware from your browser and follow the build guide.">
+<script type="module" src="https://unpkg.com/esp-web-tools@10.4.0/dist/web/install-button.js?module"></script>
+<style>
+:root{--bg:#0d110e;--card:#151b16;--line:#263027;--text:#e7ede5;--mute:#98a594;--acc:#8fd16a;--acc2:#5aa83a;--warn:#e7b04f}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--text);font:17px/1.6 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+a{color:var(--acc)}
+.wrap{max-width:860px;margin:0 auto;padding:0 16px}
+header{padding:56px 0 28px;border-bottom:1px solid var(--line);background:radial-gradient(ellipse at 50% -20%,#1d2a1c 0,transparent 70%)}
+h1{font-size:clamp(34px,7vw,56px);margin:0;letter-spacing:-1px;line-height:1.05}
+h1 span{color:var(--acc)}
+.lede{color:var(--mute);font-size:19px;max-width:620px;margin:12px 0 24px}
+.install{display:flex;flex-wrap:wrap;align-items:center;gap:16px}
+esp-web-install-button button,.btn{background:var(--acc);color:#0f1f08;border:0;border-radius:12px;padding:14px 22px;font:600 17px system-ui,sans-serif;cursor:pointer}
+.ver{color:var(--mute);font-size:14px}
+esp-web-install-button:not(:defined) span[slot]{display:none}
+.note{display:inline-block}
+.note{background:#1e1a10;border:1px solid #3d331a;color:#f1dcae;border-radius:12px;padding:12px 14px;font-size:15px}
+nav{position:sticky;top:0;background:rgba(13,17,14,.92);backdrop-filter:blur(6px);border-bottom:1px solid var(--line);z-index:5}
+nav .wrap{display:flex;gap:18px;overflow-x:auto;padding:10px 16px;font-size:15px;white-space:nowrap}
+nav a{color:var(--mute);text-decoration:none}nav a:hover{color:var(--text)}
+section{padding:36px 0;border-bottom:1px solid var(--line)}
+h2{font-size:26px;margin:0 0 6px}h2 .n{color:var(--acc);margin-right:10px}
+h3{font-size:18px;margin:22px 0 6px}
+.sub{color:var(--mute);margin:0 0 18px}
+table{width:100%;border-collapse:collapse;font-size:15px;margin:10px 0}
+th,td{text-align:left;padding:9px 10px;border-bottom:1px solid var(--line);vertical-align:top}
+th{color:var(--mute);font-weight:600;font-size:13px;text-transform:uppercase;letter-spacing:.8px}
+.tbl{overflow-x:auto}
+.dot{display:inline-block;width:11px;height:11px;border-radius:50%;margin-right:7px;vertical-align:-1px;border:1px solid #0006}
+ol.steps{counter-reset:s;list-style:none;padding:0;margin:0}
+ol.steps>li{counter-increment:s;position:relative;padding:0 0 18px 44px}
+ol.steps>li:before{content:counter(s);position:absolute;left:0;top:0;width:30px;height:30px;border-radius:50%;background:#223123;color:var(--acc);display:grid;place-items:center;font-weight:700;font-size:15px}
+code,kbd{background:#0a0d0a;border:1px solid var(--line);border-radius:6px;padding:1px 6px;font-size:.9em}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:12px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:14px 16px}
+.card b{display:block;margin-bottom:2px}.card span{color:var(--mute);font-size:15px}
+svg{max-width:100%;height:auto;display:block;margin:10px 0}
+footer{padding:30px 0 60px;color:var(--mute);font-size:14px}
+</style>
+</head>
+<body>
+<header><div class="wrap">
+  <h1>Creeper<span>Eyes</span></h1>
+  <p class="lede">Animated OLED eyes for a 3D-printed Frankenstein bust. A radar inside the chest wakes him up when someone walks past, his eyes follow the nearest person, and he groans when they lean in.</p>
+  <div class="install">
+    <esp-web-install-button manifest="manifest.json">
+      <button slot="activate">Install firmware</button>
+      <span slot="unsupported" class="note">Your browser can't flash boards. Open this page in <b>Chrome</b> or <b>Edge</b> on a computer.</span>
+      <span slot="not-allowed" class="note">Flashing needs a secure page. Open this site over <b>https</b>.</span>
+    </esp-web-install-button>
+    <span class="ver">Firmware __VERSION__</span>
+  </div>
+</div></header>
+
+<nav><div class="wrap">
+  <a href="#parts">1 · Parts</a><a href="#print">2 · Print</a><a href="#wire">3 · Wire</a><a href="#sd">4 · Sounds</a><a href="#flash">5 · Install</a><a href="#setup">6 · Set up</a><a href="#help">Help</a><a href="#credits">Credits</a>
+</div></nav>
+
+<main class="wrap">
+
+<section id="parts">
+  <h2><span class="n">1</span>Parts</h2>
+  <p class="sub">Everything plugs together or clamps into screw terminals. No soldering.</p>
+  <div class="tbl"><table>
+    <tr><th>Part</th><th>Qty</th><th>Notes</th></tr>
+    <tr><td><b>ESP32 DevKit (38-pin) + screw-terminal breakout</b></td><td>1</td><td>Buy them as a set so the terminal labels match the board. CP2102 USB chip.</td></tr>
+    <tr><td><b>Waveshare 1.5" RGB OLED (SSD1351, 128×128)</b></td><td>2</td><td>Comes with a 7-wire cable. Leave the BS jumper on <b>0</b> (4-wire SPI).</td></tr>
+    <tr><td><b>HLK-LD2450 24 GHz radar</b></td><td>1</td><td>Buy the version <b>with the 4-pin cable</b>; its connector is too fine for jumper wires.</td></tr>
+    <tr><td><b>DFPlayer Mini</b></td><td>1</td><td>MP3 player with built-in amplifier. Get a 2-pack; clones occasionally arrive dead.</td></tr>
+    <tr><td><b>Speaker, 3 W 4 Ω, 28–40 mm</b></td><td>1</td><td>One with wires already attached saves soldering.</td></tr>
+    <tr><td><b>microSD card, 1–32 GB</b></td><td>1</td><td>Formatted FAT32.</td></tr>
+    <tr><td><b>1 kΩ resistor</b> and <b>470 µF capacitor</b> (10 V+)</td><td>1 each</td><td>Protects the DFPlayer and stops pops/resets at high volume.</td></tr>
+    <tr><td><b>Mini breadboard</b> + male-male jumpers</td><td>1</td><td>Holds the DFPlayer, resistor and capacitor.</td></tr>
+    <tr><td><b>USB power bank</b> + USB cable</td><td>1</td><td>10,000 mAh runs it all evening. Test that yours doesn't switch itself off at low current.</td></tr>
+  </table></div>
+</section>
+
+<section id="print">
+  <h2><span class="n">2</span>Print</h2>
+  <p class="sub">Head and neck/shoulders base are on Printables (link coming soon). The base prints upright with no supports.</p>
+  <div class="grid">
+    <div class="card"><b>Base</b><span>0.2 mm layers, 3 walls, 15% gyroid, 5 mm brim. Plain (non-metallic) PLA so the radar can see through the chest.</span></div>
+    <div class="card"><b>Head</b><span>Drill a 25 mm hole through the centre of the head's flat neck bottom so the screen cables can drop into the base.</span></div>
+  </div>
+</section>
+
+<section id="wire">
+  <h2><span class="n">3</span>Wire it up</h2>
+  <p class="sub">Unplug USB before changing any wire. Six screen wires are shared by both eyes; only the orange wire is different.</p>
+
+  <svg viewBox="0 0 760 330" role="img" aria-label="Wiring overview: two OLED eyes, radar and DFPlayer connected to the ESP32">
+    <defs><style>.b{fill:#151b16;stroke:#3a473a;stroke-width:2;rx:12}.t{fill:#e7ede5;font:600 15px system-ui}.s{fill:#98a594;font:13px system-ui}.w{fill:none;stroke-width:3}</style></defs>
+    <rect class="b" x="290" y="70" width="180" height="190" rx="12"/><text class="t" x="380" y="100" text-anchor="middle">ESP32</text>
+    <text class="s" x="380" y="124" text-anchor="middle">23 · 18 · 16 · 5</text><text class="s" x="380" y="144" text-anchor="middle">17 (L) · 4 (R)</text>
+    <text class="s" x="380" y="174" text-anchor="middle">32 · 33 radar</text><text class="s" x="380" y="194" text-anchor="middle">25 · 26 sound</text>
+    <text class="s" x="380" y="224" text-anchor="middle">3V3 · 5V · GND</text>
+    <rect class="b" x="20" y="30" width="190" height="80" rx="12"/><text class="t" x="115" y="64" text-anchor="middle">Left eye OLED</text><text class="s" x="115" y="86" text-anchor="middle">CS → GPIO 17</text>
+    <rect class="b" x="20" y="140" width="190" height="80" rx="12"/><text class="t" x="115" y="174" text-anchor="middle">Right eye OLED</text><text class="s" x="115" y="196" text-anchor="middle">CS → GPIO 4</text>
+    <rect class="b" x="550" y="30" width="190" height="80" rx="12"/><text class="t" x="645" y="64" text-anchor="middle">LD2450 radar</text><text class="s" x="645" y="86" text-anchor="middle">5V · TX→32 · RX→33</text>
+    <rect class="b" x="550" y="160" width="190" height="80" rx="12"/><text class="t" x="645" y="194" text-anchor="middle">DFPlayer + speaker</text><text class="s" x="645" y="216" text-anchor="middle">5V · TX→26 · RX⇠1kΩ⇠25</text>
+    <rect class="b" x="290" y="285" width="180" height="36" rx="10"/><text class="s" x="380" y="308" text-anchor="middle">USB power bank</text>
+    <path class="w" stroke="#e8b84a" d="M210 70 C250 70 250 120 290 120"/><path class="w" stroke="#e8b84a" d="M210 180 C250 180 250 140 290 140"/>
+    <path class="w" stroke="#6aa9e8" d="M550 70 C510 70 510 170 470 170"/><path class="w" stroke="#c77be0" d="M550 200 C510 200 510 190 470 190"/>
+    <path class="w" stroke="#e05a5a" d="M380 285 L380 260"/>
+  </svg>
+
+  <h3>Both eyes (Waveshare cable colours)</h3>
+  <div class="tbl"><table>
+    <tr><th>Wire</th><th>Screen pin</th><th>ESP32</th></tr>
+    <tr><td><span class="dot" style="background:#e04848"></span>Red</td><td>VCC</td><td><b>3V3</b> (not 5V/VIN)</td></tr>
+    <tr><td><span class="dot" style="background:#111"></span>Black</td><td>GND</td><td>GND</td></tr>
+    <tr><td><span class="dot" style="background:#3f7fe0"></span>Blue</td><td>DIN</td><td>GPIO 23</td></tr>
+    <tr><td><span class="dot" style="background:#f0d23c"></span>Yellow</td><td>CLK</td><td>GPIO 18 (not the pin labelled CLK)</td></tr>
+    <tr><td><span class="dot" style="background:#42b54b"></span>Green</td><td>DC</td><td>GPIO 16 (RX2)</td></tr>
+    <tr><td><span class="dot" style="background:#eee"></span>White</td><td>RST</td><td>GPIO 5</td></tr>
+    <tr><td><span class="dot" style="background:#f08a2c"></span>Orange</td><td>CS</td><td><b>GPIO 17</b> (TX2) monster's left eye · <b>GPIO 4</b> monster's right eye</td></tr>
+  </table></div>
+  <p class="sub">"Left eye" means the monster's left, which is on <i>your</i> right when you face him. The pointed tear-duct corners of the two eyes should face each other.</p>
+
+  <h3>Radar</h3>
+  <div class="tbl"><table>
+    <tr><th>LD2450</th><th>ESP32</th></tr>
+    <tr><td>5V / GND</td><td>5V / GND</td></tr><tr><td>TX</td><td>GPIO 32</td></tr><tr><td>RX</td><td>GPIO 33</td></tr>
+  </table></div>
+  <p class="sub">Tape it flat against the inside of the chest, behind the shirt, facing out. Keep metal and the screens away from the front of it.</p>
+
+  <h3>Sound (on the mini breadboard)</h3>
+  <div class="tbl"><table>
+    <tr><th>DFPlayer</th><th>Connect to</th></tr>
+    <tr><td>VCC / GND</td><td>ESP32 5V / GND, with the 470 µF capacitor across them (stripe to GND)</td></tr>
+    <tr><td>RX</td><td>1 kΩ resistor → ESP32 GPIO 25</td></tr>
+    <tr><td>TX</td><td>ESP32 GPIO 26</td></tr>
+    <tr><td>SPK_1 / SPK_2</td><td>Speaker (not the DAC pins)</td></tr>
+  </table></div>
+</section>
+
+<section id="sd">
+  <h2><span class="n">4</span>Sounds</h2>
+  <p class="sub">On the microSD card create a folder named <code>mp3</code> and copy in numbered MP3s. Use royalty-free effects or record your own.</p>
+  <div class="tbl"><table>
+    <tr><th>File</th><th>When it plays</th></tr>
+    <tr><td><code>mp3/0001.mp3</code></td><td>Wake-up groan. Also plays once at power-on as a sound check.</td></tr>
+    <tr><td><code>mp3/0002.mp3</code> – <code>0005.mp3</code></td><td>Random growls while someone is in front of him.</td></tr>
+    <tr><td><code>mp3/0006.mp3</code></td><td>"Mmm…" when someone leans in close.</td></tr>
+  </table></div>
+</section>
+
+<section id="flash">
+  <h2><span class="n">5</span>Install the firmware</h2>
+  <ol class="steps">
+    <li>Use <b>Chrome</b> or <b>Edge</b> on a Windows, Mac or Linux computer.</li>
+    <li>Plug the ESP32 into the computer with a USB cable that carries data (some charge-only cables don't).</li>
+    <li>Click <b>Install firmware</b> at the top of this page, pick the port that appears (it usually mentions <i>CP210x</i> or <i>USB to UART</i>), then <b>Install</b>.</li>
+    <li>If it sits on "Connecting…", hold the <kbd>BOOT</kbd> button on the ESP32 until the progress starts.</li>
+    <li>No port listed? On Windows install the <a href="https://www.silabs.com/developers/usb-to-uart-bridge-vcp-drivers">Silicon Labs CP210x driver</a>, unplug and replug, and try again.</li>
+  </ol>
+</section>
+
+<section id="setup">
+  <h2><span class="n">6</span>Set up from your phone</h2>
+  <ol class="steps">
+    <li>Power the monster on. You should hear the groan and see both eyes animate.</li>
+    <li>On your phone, join the Wi-Fi network <b>CreeperEyes-XXXX</b>. The password is <code>frankenstein</code>.</li>
+    <li>The settings page opens by itself. If it doesn't, browse to <code>http://192.168.4.1</code>.</li>
+    <li>Pick the eye style, iris and eyelid colours, brightness and volume. Changes show on the eyes immediately and are saved.</li>
+    <li>Walk in front of him and watch <b>Radar sees</b> on the page. If his eyes look away from you, switch on <b>Flip left/right</b>; if he looks up at close kids, switch on <b>Flip up/down</b>.</li>
+    <li>Change the Wi-Fi password before the event so trick-or-treaters can't fiddle with him.</li>
+  </ol>
+</section>
+
+<section id="help">
+  <h2>Troubleshooting</h2>
+  <div class="grid">
+    <div class="card"><b>Screen stays black</b><span>Check red on 3V3, black on GND and white (RST) on GPIO 5.</span></div>
+    <div class="card"><b>Static or garbled image</b><span>Blue and yellow are swapped: DIN goes to 23, CLK to 18.</span></div>
+    <div class="card"><b>Only one eye works</b><span>Check that eye's orange wire: 17 for the left eye, 4 for the right.</span></div>
+    <div class="card"><b>Both eyes show the same thing</b><span>Both orange wires are on the same pin.</span></div>
+    <div class="card"><b>"Radar sees: not connected"</b><span>Swap the radar's TX and RX wires. The eyes still run normally without the radar.</span></div>
+    <div class="card"><b>No sound</b><span>Check the card has an <code>mp3</code> folder with <code>0001.mp3</code>, the 1 kΩ resistor is on the RX line, and volume isn't 0.</span></div>
+  </div>
+</section>
+
+<section id="credits">
+  <h2>Credits</h2>
+  <p class="sub">Eye rendering: <b>Uncanny Eyes</b> by Phil Burgess / Paint Your Dragon for Adafruit Industries (MIT), with ESP32 dual-eye changes by Laurent Moll. Frankenstein head with animated eyes by <b>Jose Aveleira</b> on Printables. Firmware, radar and settings page: <a href="https://github.com/mikejsmith1985/CreeperEyes">CreeperEyes on GitHub</a>. Browser flashing by <a href="https://esphome.github.io/esp-web-tools/">ESP Web Tools</a>.</p>
+</section>
+</main>
+<footer class="wrap">Built for trunk-or-treat. Have fun scaring people.</footer>
+</body>
+</html>

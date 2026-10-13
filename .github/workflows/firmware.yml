@@ -1,0 +1,78 @@
+name: Build firmware & installer site
+
+on:
+  push:
+    branches: [main, "feature/**", "fix/**"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Cache PlatformIO
+        uses: actions/cache@v4
+        with:
+          path: ~/.platformio
+          key: pio-${{ hashFiles('platformio.ini') }}
+
+      - name: Build
+        run: |
+          pip install --upgrade platformio esptool
+          pio run
+
+      - name: Merge into one flashable image
+        run: |
+          B=.pio/build/esp32dev
+          BOOT_APP0=$(find ~/.platformio/packages/framework-arduinoespressif32 -name boot_app0.bin | head -1)
+          VERSION="$(date -u +%Y.%m.%d)-${GITHUB_SHA::7}"
+          python -m esptool --chip esp32 merge_bin -o site/creepereyes.bin \
+            --flash_mode keep --flash_freq keep --flash_size 4MB \
+            0x1000 $B/bootloader.bin 0x8000 $B/partitions.bin 0xe000 "$BOOT_APP0" 0x10000 $B/firmware.bin
+          cat > site/manifest.json <<JSON
+          {
+            "name": "CreeperEyes",
+            "version": "$VERSION",
+            "new_install_prompt_erase": true,
+            "builds": [
+              { "chipFamily": "ESP32", "parts": [ { "path": "creepereyes.bin", "offset": 0 } ] }
+            ]
+          }
+          JSON
+          sed -i "s/__VERSION__/$VERSION/" site/index.html
+          ls -la site
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: creepereyes-firmware
+          path: site/creepereyes.bin
+
+      - uses: actions/upload-pages-artifact@v3
+        if: github.ref == 'refs/heads/main'
+        with:
+          path: site
+
+  deploy:
+    if: github.ref == 'refs/heads/main'
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4
