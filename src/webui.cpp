@@ -84,10 +84,13 @@ static void webTask(void *) {
 }
 
 void webuiStart() {
-  uint8_t mac[6]; WiFi.macAddress(mac);
+  // Bring the radio up in AP mode first and configure it before anything else,
+  // otherwise the driver briefly advertises its default open "ESP_xxxxxx" network.
+  WiFi.persistent(false);
+  WiFi.mode(WIFI_AP);
+  uint8_t mac[6]; WiFi.softAPmacAddress(mac);
   char name[24]; snprintf(name, sizeof(name), "CreeperEyes-%02X%02X", mac[4], mac[5]);
   ssid = name;
-  WiFi.mode(WIFI_AP);
   WiFi.softAPConfig(apIP, apIP, IPAddress(255, 255, 255, 0));
   WiFi.softAP(ssid.c_str(), gSet.wifiPass);
   dns.start(53, "*", apIP);
