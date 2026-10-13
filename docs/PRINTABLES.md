@@ -1,7 +1,7 @@
 # Printables listing draft
 
 > Post as a **Remix** of the head model on Printables (use "Add remix source") so the
-> credit links automatically. Fill in the two `TODO` items before publishing.
+> credit links automatically. Fill in the remaining `TODO` and clear the permission items at the bottom before publishing.
 
 ## Title
 Frankenstein Bust with Radar-Tracking Animated Eyes (ESP32)
@@ -10,7 +10,7 @@ Frankenstein Bust with Radar-Tracking Animated Eyes (ESP32)
 A full Frankenstein bust that wakes up when someone walks past, follows them with animated OLED eyes, and groans when they lean in. Built for trunk-or-treat: everything plugs together, no soldering, and the firmware installs from your browser.
 
 ## Description
-This remix adds a neck-and-shoulders base to Jose Aveleira's Frankenstein head with animated eyes. The base is a hollowed, re-fitted version of TODO-BUST-NAME by TODO-BUST-AUTHOR, cut to sit the head in a tapered socket and hollowed to hold the electronics.
+This remix adds a neck-and-shoulders base to Jose Aveleira's Frankenstein head with animated eyes. The base is a hollowed, re-fitted version of "Frankenstein" by @yueylmz (MakerWorld), cut to sit the head in a tapered socket and hollowed to hold the electronics.
 
 **What it does**
 - Two 1.5" OLED eyes animate continuously (Uncanny Eyes).
@@ -34,10 +34,13 @@ ESP32 DevKit (38-pin) with screw-terminal breakout · 2× Waveshare 1.5" RGB OLE
 
 ## Credits
 - **Frankenstein Head with Animated Eyes**: Jose Aveleira, https://www.printables.com/model/620191-frankenstein-head-with-animated-eyes
-- **Bust (neck and shoulders source)**: TODO-BUST-AUTHOR, TODO-BUST-LINK
+- **Bust (neck and shoulders source)**: "Frankenstein" by @yueylmz, https://makerworld.com/en/models/1629869-frankenstein
 - **Uncanny Eyes**: Phil Burgess / Paint Your Dragon for Adafruit Industries (MIT)
 - **ESP32 dual-eye port**: Laurent Moll
 - **CreeperEyes firmware, radar and settings page**: https://github.com/mikejsmith1985/CreeperEyes
 
-## License
-Match the most restrictive license of the source models (check both before publishing).
+## License / permission (resolve before publishing)
+- **Bust by @yueylmz is under MakerWorld's Standard Digital File License**, which forbids sharing or
+  hosting derivatives and commercial use. Do NOT upload the base STL without written permission from
+  @yueylmz. Alternative: publish everything except the base and link to the original bust.
+- **Head by Jose Aveleira**: no license shown on the Printables page; confirm remix terms before posting.
