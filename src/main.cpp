@@ -26,6 +26,8 @@
 #include "defaultEye.h"        // Standard human-ish hazel eye
 #include "newtEye.h"           // Eye of newt
 #include "puppet.h"            // Radar-driven behaviour + DFPlayer sound
+#include "settings.h"          // User settings (saved in flash)
+#include "webui.h"             // Wi-Fi settings page
 
 const uint16_t (*sclera)[SCLERA_WIDTH] = scleraDefault;
 const uint8_t (*upper)[SCREEN_WIDTH] = upperDefault;
@@ -51,8 +53,10 @@ typedef Adafruit_SSD1351 displayType; // Using OLED display(s)
 #define IRIS_MIN      150 // Clip lower analogRead() range from IRIS_PIN (WAS: 120) - Reduced range so that it doesn't look to odd with multiple eye pairs
 #define IRIS_MAX      400 // Clip upper "                                (WAS: 720) - Reduced range so that it doesn't look to odd with multiple eye pairs
 #define AUTOBLINK        // If enabled, eyes blink autonomously
-#define EYELID_COLOR 0x534A // RGB565 eyelid colour: muted Frankenstein green (80,104,80). 0x0000 = original black.
-                            // Lighter: 0x63CC (96,120,96)  Darker: 0x3A87 (60,80,60)
+// Eyelid colour, iris colour, eye style, brightness and blinking are set from the
+// web page (see settings.h) and applied by applySettings() below.
+uint16_t gEyelid565 = 0x534A;
+static uint16_t irisRam[IRIS_MAP_HEIGHT][IRIS_MAP_WIDTH];   // recoloured iris
 
 // Probably don't need to edit any config below this line, -----------------
 // unless building a single-eye project (pendant, etc.), in which case one
@@ -90,6 +94,7 @@ void setup(void) {
   uint8_t e;
 
   Serial.begin(921600);
+  settingsLoad();
   randomSeed(analogRead(A3)); // Seed random() from floating analog input
 
   // Both displays share a common reset line; 0 is passed to display
@@ -109,6 +114,7 @@ void setup(void) {
   }
 
   puppetSetup();                   // radar + sound (falls back to normal eyes if radar absent)
+  webuiStart();                    // CreeperEyes-XXXX Wi-Fi + settings page
   
   // One of the displays is configured to mirror on the X axis.  Simplifies
   // eyelid handling in the drawEye() function -- no need for distinct
@@ -148,7 +154,7 @@ void drawEye( // Renders one eye.  Inputs must be pre-clipped & valid.
       int effectiveX = e == 1 ? screenX : SCREEN_WIDTH - 1 - screenX;
       if((lower[screenY][effectiveX] <= lT) ||
          (upper[screenY][effectiveX] <= uT)) {             // Covered by eyelid
-        p = EYELID_COLOR;
+        p = gEyelid565;
       } else if((irisY < 0) || (irisY >= IRIS_HEIGHT) ||
                 (irisX < 0) || (irisX >= IRIS_WIDTH)) { // In sclera
         p = sclera[scleraY][scleraX];
@@ -209,6 +215,33 @@ uint32_t timeOfLastBlink = 0L, timeToNextBlink = 0L;
 #define SER_CMD_SIZE 9
 uint16_t serAddr = 1;
 
+// Applies the web-page settings. Runs on the render thread between frames.
+void applySettings() {
+  const uint16_t (*irisSrc)[IRIS_MAP_WIDTH];
+  if(gSet.eyeStyle == 1) {
+    sclera = scleraNewt; upper = upperNewt; lower = lowerNewt; polar = polarNewt; irisSrc = irisNewt;
+  } else {
+    sclera = scleraDefault; upper = upperDefault; lower = lowerDefault; polar = polarDefault; irisSrc = irisDefault;
+  }
+  if(gSet.irisMode == 1) {          // recolour: keep the iris texture, change its hue
+    uint32_t c = gSet.irisColor;
+    uint16_t cr = (c >> 16) & 0xFF, cg = (c >> 8) & 0xFF, cb = c & 0xFF;
+    for(int y = 0; y < IRIS_MAP_HEIGHT; y++) for(int x = 0; x < IRIS_MAP_WIDTH; x++) {
+      uint16_t p = irisSrc[y][x];
+      uint16_t r = ((p >> 11) & 31) * 255 / 31, g = ((p >> 5) & 63) * 255 / 63, b = (p & 31) * 255 / 31;
+      uint16_t lum = (r * 77 + g * 150 + b * 29) >> 8;
+      lum = min(255, lum * 2);
+      irisRam[y][x] = rgb888to565(((cr * lum / 255) << 16) | ((cg * lum / 255) << 8) | (cb * lum / 255));
+    }
+    iris = irisRam;
+  } else {
+    iris = irisSrc;
+  }
+  gEyelid565 = rgb888to565(gSet.eyelidColor);
+  uint8_t contrast = constrain(gSet.brightness, 1, 15);
+  for(uint8_t e = 0; e < NUM_EYES; e++) eye[e].display.sendCommand(SSD1351_CMD_CONTRASTMASTER, &contrast, 1);
+}
+
 void frame( // Process motion for a single frame of left or right eye
   uint16_t        iScale) {     // Iris scale (0-1023) passed in
   static uint32_t frames   = 0; // Used in frame rate calculation
@@ -221,7 +254,10 @@ void frame( // Process motion for a single frame of left or right eye
   static uint16_t serEyeCtrl = 0;
 
   if(++eyeIndex >= NUM_EYES) eyeIndex = 0; // Cycle through eyes, 1 per call
-  if(eyeIndex == 0) puppetUpdate(micros());   // radar/sound behaviour, once per eye pair
+  if(eyeIndex == 0) {
+    if(gSettingsDirty) { gSettingsDirty = false; applySettings(); }
+    puppetUpdate(micros());                   // radar/sound behaviour, once per eye pair
+  }
   { int16_t io = puppetIris(); if(io >= 0) iScale = io; }
 
   // X/Y movement
@@ -288,7 +324,7 @@ void frame( // Process motion for a single frame of left or right eye
 #ifdef AUTOBLINK
   // Similar to the autonomous eye movement above -- blink start times
   // and durations are random (within ranges).
-  if(puppetAllowBlink() && (t - timeOfLastBlink) >= timeToNextBlink) { // Start new blink?
+  if(gSet.autoBlink && puppetAllowBlink() && (t - timeOfLastBlink) >= timeToNextBlink) { // Start new blink?
     timeOfLastBlink = t;
     uint32_t blinkDuration = random(36000, 72000); // ~1/28 - ~1/14 sec
     // Set up durations for both eyes (if not already winking)

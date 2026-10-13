@@ -19,13 +19,9 @@
 #define SOUND_BAUD     9600
 
 // ---------------- Tuning ----------------
-#define SOUND_VOLUME        25     // 0-30
-#define WAKE_DISTANCE_MM    2500   // someone closer than this wakes him up
-#define LEAN_DISTANCE_MM    450    // closer than this = "leaning in" reaction
+// Volume, wake/lean distances, sleep delay and gaze direction live in settings.h
+// and are edited from the web page.
 #define ZONE_HALF_WIDTH_MM  1500   // ignore people further to the side than this
-#define SLEEP_AFTER_MS      8000   // nobody seen for this long -> back to sleep
-#define GAZE_DIR_X          1      // flip to -1 if eyes look AWAY from people side-to-side
-#define GAZE_DIR_Y          1      // flip to -1 if eyes look up at close kids instead of down
 #define RADAR_DEBUG_PRINT   1      // print radar targets to the serial monitor twice a second
 
 // Sound files: microSD card, folder named "mp3", files named by number.
@@ -41,3 +37,8 @@ bool    puppetGaze(int16_t *x, int16_t *y); // true -> use x,y (0-1023) as eye p
 uint8_t puppetLidClose();                   // 0 = normal, 255 = fully closed
 int16_t puppetIris();                       // -1 = autonomous, else iris value (IRIS_MIN..IRIS_MAX)
 bool    puppetAllowBlink();                 // false while asleep
+
+// Used by the web page
+void    puppetApplyVolume();                // push gSet.volume to the DFPlayer
+void    puppetCommand(const String &cmd);   // "wake", "sleep", "sound:N"
+String  puppetStatusJson();                 // radar / state snapshot for the web page

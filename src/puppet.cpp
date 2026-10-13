@@ -1,5 +1,6 @@
 // puppet.cpp -- see include/puppet.h for what this does and how it is wired.
 #include "puppet.h"
+#include "settings.h"
 #include <HardwareSerial.h>
 #include <math.h>
 
@@ -104,6 +105,10 @@ static float    gazeX = 512, gazeY = 512, gazeTX = 512, gazeTY = 512;
 static int16_t  irisOverride = -1;
 static uint32_t irisUntilMs = 0;
 static uint32_t lastUpdateMs = 0;
+static volatile int pendingCmd = 0;     // 1 wake, 2 sleep, 100+N play sound N, 200 volume
+static Target   lastTarget = {false, 0, 0};
+static float    lastDist = 0;
+static bool     lastSomeone = false;
 
 static void setState(State s) {
   static const char *names[] = {"NO_RADAR", "ASLEEP", "WAKING", "AWAKE"};
@@ -115,7 +120,7 @@ void puppetSetup() {
   radarSerial.begin(RADAR_BAUD, SERIAL_8N1, RADAR_RX_PIN, RADAR_TX_PIN);
   soundSerial.begin(SOUND_BAUD, SERIAL_8N1, SOUND_RX_PIN, SOUND_TX_PIN);
   delay(1200);                       // DFPlayer needs ~1 s after power-up
-  dfSend(0x06, SOUND_VOLUME);        // set volume
+  dfSend(0x06, gSet.volume);         // set volume
   delay(100);
   playTrack(TRK_WAKE, 3000, true);   // boot test: you should hear the groan once
   Serial.println("[puppet] started. Radar on GPIO32/33 @256000, DFPlayer on GPIO26/25 @9600");
@@ -134,6 +139,10 @@ void puppetUpdate(uint32_t nowMicros) {
 
   pollRadar();
 
+  int cmd = pendingCmd; pendingCmd = 0;
+  if (cmd == 200) dfSend(0x06, gSet.volume);
+  else if (cmd >= 100) playTrack(cmd - 100, 1000, true);
+
   if (!radarAlive()) {               // no radar -> original behaviour
     if (state != NO_RADAR) setState(NO_RADAR);
     lid = lidTarget = 0; irisOverride = -1;
@@ -144,6 +153,9 @@ void puppetUpdate(uint32_t nowMicros) {
   Target t; float dist;
   bool someone = nearestTarget(t, dist);
   if (someone) lastSeenMs = now;
+  lastSomeone = someone; if (someone) { lastTarget = t; lastDist = dist; }
+  if (cmd == 1 && state == ASLEEP) { someone = true; dist = 1000; t = {true, 0, 1000}; lastSeenMs = now; }
+  if (cmd == 2 && state != ASLEEP) setState(ASLEEP);
 
 #if RADAR_DEBUG_PRINT
   static uint32_t lastPrint = 0;
@@ -157,12 +169,12 @@ void puppetUpdate(uint32_t nowMicros) {
   switch (state) {
     case ASLEEP:
       lidTarget = 238;               // a sleepy sliver
-      gazeTX = 512; gazeTY = 512 - 120 * GAZE_DIR_Y;     // eyes rolled down a bit
+      gazeTX = 512; gazeTY = 512 - 120 * (gSet.flipGazeY ? -1 : 1);     // eyes rolled down a bit
       if (now > nextTwitchMs) {      // occasional twitch while sleeping
         lid = 190;
         nextTwitchMs = now + random(8000, 20000);
       }
-      if (someone && dist < WAKE_DISTANCE_MM) {
+      if (someone && dist < gSet.wakeDistMm) {
         setState(WAKING);
         playTrack(TRK_WAKE, 3000, true);
         irisOverride = kIrisMax; irisUntilMs = now + 1500;   // pupils snap wide
@@ -176,13 +188,13 @@ void puppetUpdate(uint32_t nowMicros) {
     case AWAKE:
       if (someone) {
         float ang = atan2f((float)t.x, (float)t.y);                 // radians, 0 = straight ahead
-        float gx = 512 + GAZE_DIR_X * (ang / 1.05f) * 430;          // +-60 deg -> +-430
+        float gx = 512 + (gSet.flipGazeX ? -1 : 1) * (ang / 1.05f) * 430;          // +-60 deg -> +-430
         float down = constrain((2000.0f - dist) / 1600.0f, 0.0f, 1.0f); // closer kids -> look down
-        float gy = 512 - GAZE_DIR_Y * down * 300;
+        float gy = 512 - (gSet.flipGazeY ? -1 : 1) * down * 300;
         gazeTX = constrain(gx, 80.0f, 943.0f);
         gazeTY = constrain(gy, 80.0f, 943.0f);
 
-        if (dist < LEAN_DISTANCE_MM && now > leanCooldownMs) {      // leaning in!
+        if (dist < gSet.leanDistMm && now > leanCooldownMs) {      // leaning in!
           playTrack(TRK_LEAN, 2500, true);
           irisOverride = kIrisMin; irisUntilMs = now + 2000;        // pupils shrink
           lid = 0;
@@ -193,7 +205,7 @@ void puppetUpdate(uint32_t nowMicros) {
           nextGrowlMs = now + random(20000, 40000);
         }
       }
-      if (state == AWAKE && now - lastSeenMs > SLEEP_AFTER_MS) setState(ASLEEP);
+      if (state == AWAKE && now - lastSeenMs > (gSet.sleepAfterS * 1000UL)) setState(ASLEEP);
       break;
 
     default: break;
@@ -220,3 +232,20 @@ bool puppetGaze(int16_t *x, int16_t *y) {
 uint8_t puppetLidClose()   { return (uint8_t)constrain(lid, 0.0f, 255.0f); }
 int16_t puppetIris()       { return irisOverride; }
 bool    puppetAllowBlink() { return state != ASLEEP; }
+
+void puppetApplyVolume() { pendingCmd = 200; }   // sent from the render thread
+
+void puppetCommand(const String &cmd) {
+  if (cmd == "wake") pendingCmd = 1;
+  else if (cmd == "sleep") pendingCmd = 2;
+  else if (cmd.startsWith("sound:")) pendingCmd = 100 + constrain(cmd.substring(6).toInt(), 1, 99);
+}
+
+String puppetStatusJson() {
+  static const char *names[] = {"no radar", "asleep", "waking", "awake"};
+  char b[160];
+  snprintf(b, sizeof(b), "{\"state\":\"%s\",\"radar\":%s,\"person\":%s,\"x\":%d,\"y\":%d,\"dist\":%d}",
+           names[state], radarAlive() ? "true" : "false", lastSomeone ? "true" : "false",
+           lastTarget.x, lastTarget.y, (int)lastDist);
+  return String(b);
+}
