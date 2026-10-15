@@ -4,12 +4,15 @@
 
 extern const char INDEX_HTML[] PROGMEM = R"HTML(<!doctype html>
 <html lang="en"><head><meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes"><meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"><meta name="apple-mobile-web-app-title" content="Creeper">
+<meta name="theme-color" content="#0e120f"><link rel="apple-touch-icon" href="/apple-touch-icon.png">
 <title>CreeperEyes</title>
 <style>
 :root{--bg:#0e120f;--card:#171d18;--line:#2a332b;--text:#e6ece4;--mute:#93a08f;--acc:#8fd16a;--warn:#e0a84a}
 *{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--text);font:16px/1.4 system-ui,-apple-system,Segoe UI,Roboto,sans-serif}
-header{padding:20px 16px 8px}h1{margin:0;font-size:22px;letter-spacing:.5px}h1 span{color:var(--acc)}
+header{padding:calc(20px + env(safe-area-inset-top)) 16px 8px}h1{margin:0;font-size:22px;letter-spacing:.5px}h1 span{color:var(--acc)}
 .sub{color:var(--mute);font-size:13px;margin-top:2px}
 main{max-width:560px;margin:0 auto;padding:0 16px 40px}
 section{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:14px 16px;margin:14px 0}

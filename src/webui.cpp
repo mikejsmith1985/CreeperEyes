@@ -4,6 +4,7 @@
 #include <WebServer.h>
 #include <DNSServer.h>
 #include <Update.h>
+#include <ESPmDNS.h>
 #include "settings.h"
 #include "puppet.h"
 #include "webui.h"
@@ -18,6 +19,8 @@ volatile bool gOtaActive = false;
 static String otaError;
 
 extern const char INDEX_HTML[] PROGMEM;
+extern const uint8_t ICON_PNG[] PROGMEM;
+extern const size_t ICON_PNG_LEN;
 
 static String hex6(uint32_t c) { char b[8]; snprintf(b, sizeof(b), "#%06X", (unsigned)(c & 0xFFFFFF)); return b; }
 static uint32_t parseHex(const String &s) { return strtoul(s.c_str() + (s.startsWith("#") ? 1 : 0), nullptr, 16) & 0xFFFFFF; }
@@ -183,9 +186,22 @@ void webuiStart() {
   server.on("/api/visits/reset", HTTP_POST, [] { puppetResetVisitsTonight(); server.send(200, "application/json", puppetStatusJson()); });
   server.on("/update", HTTP_POST, handleUpdateDone, handleUpdateUpload);
   server.on("/api/status", HTTP_GET, [] { server.send(200, "application/json", puppetStatusJson()); });
-  server.onNotFound(redirectToPortal);   // makes phones pop the page up automatically
+  // Answer the phones' "is there internet?" probes with the expected replies, so iOS/Android
+  // don't show their captive-portal sheet over the page. Open http://192.168.4.1 or
+  // http://creeper.local in the browser instead (or add it to the home screen).
+  server.on("/hotspot-detect.html", HTTP_GET, [] {        // Apple
+    server.send(200, "text/html", "<HTML><HEAD><TITLE>Success</TITLE></HEAD><BODY>Success</BODY></HTML>"); });
+  server.on("/library/test/success.html", HTTP_GET, [] {
+    server.send(200, "text/html", "<HTML><HEAD><TITLE>Success</TITLE></HEAD><BODY>Success</BODY></HTML>"); });
+  server.on("/generate_204", HTTP_GET, [] { server.send(204); });   // Android / Chrome
+  server.on("/gen_204", HTTP_GET, [] { server.send(204); });
+  server.on("/connecttest.txt", HTTP_GET, [] { server.send(200, "text/plain", "Microsoft Connect Test"); });
+  server.on("/ncsi.txt", HTTP_GET, [] { server.send(200, "text/plain", "Microsoft NCSI"); });
+  server.on("/apple-touch-icon.png", HTTP_GET, [] { server.send_P(200, "image/png", (const char *)ICON_PNG, ICON_PNG_LEN); });
+  server.onNotFound(redirectToPortal);
   server.begin();
+  if (MDNS.begin("creeper")) MDNS.addService("http", "tcp", 80);   // http://creeper.local
 
   xTaskCreatePinnedToCore(webTask, "web", 8192, nullptr, 1, nullptr, 0);
-  Serial.printf("[web] Wi-Fi \"%s\" password \"%s\" -> http://%s/\n", ssid.c_str(), gSet.wifiPass, apIP.toString().c_str());
+  Serial.printf("[web] Wi-Fi \"%s\" password \"%s\" -> http://%s/ or http://creeper.local/\n", ssid.c_str(), gSet.wifiPass, apIP.toString().c_str());
 }
