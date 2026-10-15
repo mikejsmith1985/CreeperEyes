@@ -12,6 +12,9 @@ static const int16_t kIrisMin = 150, kIrisMax = 400;
 static HardwareSerial radarSerial(2);
 static HardwareSerial soundSerial(1);
 
+// Elapsed ms, never negative (timestamps set via millis() or by the web task can be newer than 'now').
+static inline uint32_t since(uint32_t now, uint32_t t) { return (int32_t)(now - t) < 0 ? 0 : now - t; }
+
 static inline float frand(float a, float b) { return a + (b - a) * (random(10000) / 10000.0f); }
 
 // =====================================================================
@@ -175,7 +178,7 @@ static void startAntic(Antic a) {
 static bool evalAntic(uint8_t eye, uint32_t now, float &dx, float &dy, float &lidE) {
   dx = dy = lidE = 0;
   if (antic == AN_NONE) return false;
-  float f = (now - anticStartMs) / (float)anticDurMs;
+  float f = since(now, anticStartMs) / (float)anticDurMs;
   if (f >= 1) { antic = AN_NONE; return false; }
   float env = fminf(1.0f, fminf(f * 4, (1 - f) * 4));            // ease in / out
   switch (antic) {
@@ -316,7 +319,7 @@ static void handlePhoneAction(uint8_t a, uint32_t now) {
 void puppetUpdate(uint32_t nowMicros) {
   (void)nowMicros;
   uint32_t now = millis();
-  float dt = lastUpdateMs ? (now - lastUpdateMs) / 1000.0f : 0.0f;
+  float dt = lastUpdateMs ? since(now, lastUpdateMs) / 1000.0f : 0.0f;
   lastUpdateMs = now;
 
   pollRadar();
@@ -335,7 +338,7 @@ void puppetUpdate(uint32_t nowMicros) {
   }
   // Phone actions queued by the web task
   while (actTail != actHead) { uint8_t a = actQ[actTail]; actTail = (actTail + 1) & 7; handlePhoneAction(a, now); }
-  if (phoneActive && now - phoneLastMs > 90000) { phoneActive = false; phoneClosed = false; Serial.println("[puppet] phone idle, back to normal"); }
+  if (phoneActive && since(now, phoneLastMs) > 90000) { phoneActive = false; phoneClosed = false; Serial.println("[puppet] phone idle, back to normal"); }
 
   // ---------------- what the radar sees ----------------
   bool alive = radarAlive();
@@ -348,7 +351,7 @@ void puppetUpdate(uint32_t nowMicros) {
 
   // Visitor counter: someone arrives within wake distance after the zone was empty for 4 s
   bool present = someone && dist < gSet.wakeDistMm;
-  if (present && !zonePresent && (now - zoneEmptySinceMs) > 4000) {
+  if (present && !zonePresent && since(now, zoneEmptySinceMs) > 4000) {
     visitsTonight++; visitsTotal++; visitsDirty = true;
     Serial.printf("[puppet] visitor #%u tonight\n", visitsTonight);
   }
@@ -430,7 +433,7 @@ void puppetUpdate(uint32_t nowMicros) {
 
     case WAKING:
       lidTarget = 0;
-      if (now - stateSinceMs > 700) { setState(AWAKE); nextGrowlMs = now + random(15000, 30000); }
+      if (since(now, stateSinceMs) > 700) { setState(AWAKE); nextGrowlMs = now + random(15000, 30000); }
       // fall through so gaze follows during wake-up
     case AWAKE: {
       lidTarget = 0;
@@ -454,7 +457,7 @@ void puppetUpdate(uint32_t nowMicros) {
         // Staring contest: someone standing still close by
         if (!staring && !phone && dist < 1800 && now > stareCooldownMs && peopleInZone == 1) {
           if (abs(t.x - stareAX) > 120 || abs(t.y - stareAY) > 120) { stareAX = t.x; stareAY = t.y; stareAnchorMs = now; }
-          else if (now - stareAnchorMs > 2500) {
+          else if (since(now, stareAnchorMs) > 2500) {
             staring = true; stareStartMs = now; stareLenMs = random(5000, 8000);
             antic = AN_NONE;
             Serial.println("[puppet] staring contest!");
@@ -463,9 +466,9 @@ void puppetUpdate(uint32_t nowMicros) {
         if (staring) {
           if (abs(t.x - stareAX) > 250 || abs(t.y - stareAY) > 250) { staring = false; stareCooldownMs = now + 8000; }
           else {
-            float k = (now - stareStartMs) / (float)stareLenMs;      // pupils slowly narrow
+            float k = since(now, stareStartMs) / (float)stareLenMs;      // pupils slowly narrow
             irisOverride = kIrisMax - (kIrisMax - kIrisMin) * constrain(k, 0.0f, 1.0f); irisUntilMs = now + 200;
-            if (now - stareStartMs > stareLenMs) {                    // he loses: big slow blink
+            if (since(now, stareStartMs) > stareLenMs) {                    // he loses: big slow blink
               staring = false; stareCooldownMs = now + 20000;
               startAntic(AN_BLINK_SLOW);
               playTrack(TRK_CHUCKLE, 2500, true);
@@ -490,7 +493,7 @@ void puppetUpdate(uint32_t nowMicros) {
 
         // Transformation when someone lingers
         if (!phone && scary && gSet.transforms && transformStyle < 0 && !staring &&
-            now - lingerStartMs > 20000 && now > transformCooldownMs) {
+            since(now, lingerStartMs) > 20000 && now > transformCooldownMs) {
           int16_t cur = visitStyle >= 0 ? visitStyle : gSet.eye[0].style;
           int16_t d = eyeStyleFind("Dragon");
           if (d == cur) d = eyeStyleFind("Goat / Krampus");
@@ -513,12 +516,12 @@ void puppetUpdate(uint32_t nowMicros) {
         staring = false; focusSlot = -1;
         lingerStartMs = now;
         // Looking around for whoever just left
-        if (!phone && gSet.antics && antic == AN_NONE && now - lastSeenMs > 1500 && now > nextAnticMs) {
+        if (!phone && gSet.antics && antic == AN_NONE && since(now, lastSeenMs) > 1500 && now > nextAnticMs) {
           startAntic(AN_LOOK); nextAnticMs = now + random(6000, 10000);
         }
       }
       if (transformStyle >= 0 && now > transformEndMs) { setTransformStyle(-1); irisOverride = kIrisMax; irisUntilMs = now + 800; }
-      if (state == AWAKE && now - lastSeenMs > (gSet.sleepAfterS * 1000UL)) {
+      if (state == AWAKE && since(now, lastSeenMs) > (gSet.sleepAfterS * 1000UL)) {
         setState(ASLEEP);
         if (gSet.antics && !phone) startAntic(AN_NOD);
         nextSnoreMs = now + random(15000, 30000);
@@ -563,7 +566,7 @@ void puppetUpdate(uint32_t nowMicros) {
   outGazeValid = baseValid || (anyAntic && (antic == AN_ROLL || antic == AN_CROSS || antic == AN_LOOK || antic == AN_NOD));
 
   // ---------------- power saver ----------------
-  saving = gSet.powerSaver && alive && !phone && state == ASLEEP && now - stateSinceMs > 20000;
+  saving = gSet.powerSaver && alive && !phone && state == ASLEEP && since(now, stateSinceMs) > 20000;
 }
 
 bool puppetGaze(uint8_t eye, int16_t *x, int16_t *y) {
