@@ -26,6 +26,8 @@ button.pri{background:var(--acc);color:#10200a;border-color:var(--acc);font-weig
 #status{display:grid;grid-template-columns:1fr 1fr;gap:8px}.stat{background:#0b0f0c;border-radius:10px;padding:8px 10px}.stat b{display:block;font-size:18px}
 .stat span{color:var(--mute);font-size:12px}#toast{position:fixed;left:50%;bottom:18px;transform:translateX(-50%);background:var(--acc);color:#10200a;padding:8px 14px;border-radius:20px;font-weight:600;opacity:0;transition:.3s}
 #toast.on{opacity:1}
+.eyebox{border-top:1px solid var(--line);margin-top:4px;padding-top:6px}.eyett{font-size:14px;margin:6px 0 0;color:var(--acc)}
+body.linked .eyebox[data-eye=R]{display:none}body.linked .eyett{display:none}
 </style></head><body>
 <header><main style="padding:0"><h1>Creeper<span>Eyes</span></h1><div class="sub" id="net">Changes apply instantly and are saved automatically.</div></main></header>
 <main>
@@ -35,9 +37,17 @@ button.pri{background:var(--acc);color:#10200a;border-color:var(--acc);font-weig
 </section>
 
 <section><h2>Look</h2>
- <div class="row"><label>Eye style</label><select data-k="eyeStyle"><option value="0">Human</option><option value="1">Newt</option></select></div>
- <div class="row"><label>Iris colour<small>Off keeps the eye's natural colours</small></label><input type="checkbox" class="sw" data-k="irisMode"><input type="color" data-k="irisColor"></div>
- <div class="row"><label>Eyelid colour<small>Match it to your printed skin</small></label><input type="color" data-k="eyelidColor"></div>
+ <div class="row"><label>Same look for both eyes<small>Turn off to style each eye on its own</small></label><input type="checkbox" class="sw" data-k="linkEyes" id="link"></div>
+ <div class="eyebox" data-eye="L"><h3 class="eyett">Left eye</h3>
+  <div class="row"><label>Eye style</label><select data-k="style" class="styles"></select></div>
+  <div class="row"><label>Iris colour<small>Off keeps the eye's own colours</small></label><input type="checkbox" class="sw" data-k="irisMode"><input type="color" data-k="irisColor"></div>
+  <div class="row"><label>Eyelid colour<small>Match it to your printed skin</small></label><input type="color" data-k="eyelidColor"></div>
+ </div>
+ <div class="eyebox" data-eye="R"><h3 class="eyett">Right eye</h3>
+  <div class="row"><label>Eye style</label><select data-k="style" class="styles"></select></div>
+  <div class="row"><label>Iris colour<small>Off keeps the eye's own colours</small></label><input type="checkbox" class="sw" data-k="irisMode"><input type="color" data-k="irisColor"></div>
+  <div class="row"><label>Eyelid colour<small>Match it to your printed skin</small></label><input type="color" data-k="eyelidColor"></div>
+ </div>
  <div class="row"><label>Brightness</label><input type="range" min="1" max="15" data-k="brightness"><output></output></div>
  <div class="row"><label>Blinking</label><input type="checkbox" class="sw" data-k="autoBlink"></div>
 </section>
@@ -62,16 +72,23 @@ button.pri{background:var(--acc);color:#10200a;border-color:var(--acc);font-weig
 </main>
 <div id="toast">Saved</div>
 <script>
-const $=s=>document.querySelectorAll(s);let t;
+const $=s=>document.querySelectorAll(s);let t,S={};
 function toast(m){const e=document.getElementById('toast');e.textContent=m||'Saved';e.classList.add('on');clearTimeout(t);t=setTimeout(()=>e.classList.remove('on'),1200)}
 function fmt(el){const u=el.dataset.u,v=+el.value;return u=='m'?(v/1000).toFixed(v<1000?2:1)+' m':u=='s'?v+' s':v}
-function fill(s){$('[data-k]').forEach(el=>{const v=s[el.dataset.k];if(v===undefined)return;
- if(el.type=='checkbox')el.checked=!!v;else el.value=v;const o=el.parentElement.querySelector('output');if(o)o.textContent=fmt(el)});
+function key(el){const b=el.closest('.eyebox');return el.dataset.k+(b?b.dataset.eye:'')}
+function fill(s){S=s;
+ if(s.styles)$('select.styles').forEach(sel=>{if(sel.options.length!=s.styles.length)sel.innerHTML=s.styles.map((n,i)=>'<option value="'+i+'">'+n+'</option>').join('')});
+ $('[data-k]').forEach(el=>{const v=s[key(el)];if(v===undefined)return;
+  if(el.type=='checkbox')el.checked=!!v;else el.value=v;const o=el.parentElement.querySelector('output');if(o)o.textContent=fmt(el)});
+ document.body.classList.toggle('linked',!!s.linkEyes);
  if(s.ssid)document.getElementById('net').textContent='Connected to '+s.ssid+' · changes apply instantly and save automatically.'}
 async function post(u,b){const r=await fetch(u,{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:new URLSearchParams(b)});return r.json()}
 const timers={};
-function send(el){const k=el.dataset.k,v=el.type=='checkbox'?(el.checked?1:0):el.value;clearTimeout(timers[k]);
- timers[k]=setTimeout(async()=>{fill(await post('/api/set',{[k]:v}));toast()},150)}
+function val(el){return el.type=='checkbox'?(el.checked?1:0):el.value}
+function send(el){const k=key(el),v=val(el),b={[k]:v};
+ if(el.closest('.eyebox')&&S.linkEyes){b[el.dataset.k+'L']=v;b[el.dataset.k+'R']=v}
+ if(k=='linkEyes'&&v==1)['style','irisMode','irisColor','eyelidColor'].forEach(n=>b[n+'R']=S[n+'L']);
+ clearTimeout(timers[k]);timers[k]=setTimeout(async()=>{fill(await post('/api/set',b));toast()},150)}
 $('[data-k]').forEach(el=>{el.addEventListener('input',()=>{const o=el.parentElement.querySelector('output');if(o)o.textContent=fmt(el);send(el)})});
 async function cmd(c){await post('/api/cmd',{c});toast(c.startsWith('sound')?'Playing':'OK')}
 async function setPw(){const p=document.getElementById('pw').value;if(p.length<8){toast('8+ characters');return}

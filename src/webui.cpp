@@ -6,6 +6,7 @@
 #include "settings.h"
 #include "puppet.h"
 #include "webui.h"
+#include "eyestyle.h"
 
 static WebServer server(80);
 static DNSServer dns;
@@ -19,15 +20,28 @@ static String hex6(uint32_t c) { char b[8]; snprintf(b, sizeof(b), "#%06X", (uns
 static uint32_t parseHex(const String &s) { return strtoul(s.c_str() + (s.startsWith("#") ? 1 : 0), nullptr, 16) & 0xFFFFFF; }
 
 static void sendSettings() {
-  char b[420];
+  String j; j.reserve(900);
+  j += "{";
+  const char *side[2] = {"L", "R"};
+  for (int e = 0; e < 2; e++) {
+    const EyeLook &L = gSet.eye[e];
+    j += "\"style" + String(side[e]) + "\":" + L.style + ",";
+    j += "\"irisMode" + String(side[e]) + "\":" + L.irisMode + ",";
+    j += "\"irisColor" + String(side[e]) + "\":\"" + hex6(L.irisColor) + "\",";
+    j += "\"eyelidColor" + String(side[e]) + "\":\"" + hex6(L.eyelidColor) + "\",";
+  }
+  char b[300];
   snprintf(b, sizeof(b),
-    "{\"eyeStyle\":%u,\"irisMode\":%u,\"irisColor\":\"%s\",\"eyelidColor\":\"%s\",\"brightness\":%u,"
-    "\"autoBlink\":%s,\"volume\":%u,\"wakeDistMm\":%u,\"leanDistMm\":%u,\"sleepAfterS\":%u,"
-    "\"flipGazeX\":%s,\"flipGazeY\":%s,\"ssid\":\"%s\"}",
-    gSet.eyeStyle, gSet.irisMode, hex6(gSet.irisColor).c_str(), hex6(gSet.eyelidColor).c_str(), gSet.brightness,
-    gSet.autoBlink ? "true" : "false", gSet.volume, gSet.wakeDistMm, gSet.leanDistMm, gSet.sleepAfterS,
+    "\"linkEyes\":%s,\"brightness\":%u,\"autoBlink\":%s,\"volume\":%u,\"wakeDistMm\":%u,\"leanDistMm\":%u,"
+    "\"sleepAfterS\":%u,\"flipGazeX\":%s,\"flipGazeY\":%s,\"ssid\":\"%s\",",
+    gSet.linkEyes ? "true" : "false", gSet.brightness, gSet.autoBlink ? "true" : "false", gSet.volume,
+    gSet.wakeDistMm, gSet.leanDistMm, gSet.sleepAfterS,
     gSet.flipGazeX ? "true" : "false", gSet.flipGazeY ? "true" : "false", ssid.c_str());
-  server.send(200, "application/json", b);
+  j += b;
+  j += "\"styles\":[";
+  for (int i = 0; i < kEyeStyleCount; i++) { if (i) j += ","; j += "\""; j += kEyeStyles[i].name; j += "\""; }
+  j += "]}";
+  server.send(200, "application/json", j);
 }
 
 // POST /api/set  key=value (form encoded, any subset of keys)
@@ -37,10 +51,14 @@ static void handleSet() {
     const String k = server.argName(i), v = server.arg(i);
     long n = v.toInt();
     bool on = (v == "1" || v == "true" || v == "on");
-    if      (k == "eyeStyle")    gSet.eyeStyle    = constrain(n, 0, 1);
-    else if (k == "irisMode")    gSet.irisMode    = constrain(n, 0, 1);
-    else if (k == "irisColor")   gSet.irisColor   = parseHex(v);
-    else if (k == "eyelidColor") gSet.eyelidColor = parseHex(v);
+    // per-eye keys end in L or R, e.g. styleL / irisColorR
+    int e = k.endsWith("L") ? 0 : k.endsWith("R") ? 1 : -1;
+    String base = e >= 0 ? k.substring(0, k.length() - 1) : k;
+    if (e >= 0 && base == "style")            gSet.eye[e].style       = constrain(n, 0, kEyeStyleCount - 1);
+    else if (e >= 0 && base == "irisMode")    gSet.eye[e].irisMode    = constrain(n, 0, 1);
+    else if (e >= 0 && base == "irisColor")   gSet.eye[e].irisColor   = parseHex(v);
+    else if (e >= 0 && base == "eyelidColor") gSet.eye[e].eyelidColor = parseHex(v);
+    else if (k == "linkEyes")    gSet.linkEyes    = on;
     else if (k == "brightness")  gSet.brightness  = constrain(n, 1, 15);
     else if (k == "autoBlink")   gSet.autoBlink   = on;
     else if (k == "volume")      { gSet.volume    = constrain(n, 0, 30); volChanged = true; }

@@ -3,12 +3,17 @@
 #pragma once
 #include <Arduino.h>
 
-struct Settings {
-  // Look
-  uint8_t  eyeStyle;      // 0 = human (hazel), 1 = newt
+struct EyeLook {          // one per eye: [0] = left (CS on GPIO17), [1] = right (CS on GPIO4)
+  uint8_t  style;         // index into kEyeStyles (0 = human)
   uint8_t  irisMode;      // 0 = original colours, 1 = recolour iris with irisColor
   uint32_t irisColor;     // 0xRRGGBB
   uint32_t eyelidColor;   // 0xRRGGBB
+};
+
+struct Settings {
+  // Look
+  EyeLook  eye[2];
+  bool     linkEyes;      // web page edits both eyes together
   uint8_t  brightness;    // 1..15 (OLED master contrast)
   bool     autoBlink;
 

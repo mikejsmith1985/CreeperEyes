@@ -6,13 +6,22 @@ volatile bool gSettingsDirty = true;   // apply once at boot
 
 static Preferences prefs;
 static const char *NS = "creeper";
-static const uint16_t kVersion = 1;    // bump if the struct layout changes
+static const uint16_t kVersion = 2;    // bump if the struct layout changes
+
+// Layout of version 1 (single look for both eyes), so old saves carry over.
+struct SettingsV1 {
+  uint8_t eyeStyle, irisMode; uint32_t irisColor, eyelidColor; uint8_t brightness; bool autoBlink;
+  uint8_t volume; uint16_t wakeDistMm, leanDistMm, sleepAfterS; bool flipGazeX, flipGazeY; char wifiPass[33];
+};
 
 void settingsReset() {
-  gSet.eyeStyle    = 0;
-  gSet.irisMode    = 0;
-  gSet.irisColor   = 0x6B8E23;         // olive green
-  gSet.eyelidColor = 0x506850;         // muted Frankenstein green (= RGB565 0x534A)
+  for (int e = 0; e < 2; e++) {
+    gSet.eye[e].style       = 0;
+    gSet.eye[e].irisMode    = 0;
+    gSet.eye[e].irisColor   = 0x6B8E23;   // olive green
+    gSet.eye[e].eyelidColor = 0x506850;   // muted Frankenstein green (= RGB565 0x534A)
+  }
+  gSet.linkEyes    = true;
   gSet.brightness  = 15;
   gSet.autoBlink   = true;
   gSet.volume      = 25;
@@ -27,8 +36,16 @@ void settingsReset() {
 void settingsLoad() {
   settingsReset();
   prefs.begin(NS, true);
-  if (prefs.getUShort("ver", 0) == kVersion && prefs.getBytesLength("set") == sizeof(Settings)) {
+  uint16_t ver = prefs.getUShort("ver", 0);
+  if (ver == kVersion && prefs.getBytesLength("set") == sizeof(Settings)) {
     prefs.getBytes("set", &gSet, sizeof(Settings));
+  } else if (ver == 1 && prefs.getBytesLength("set") == sizeof(SettingsV1)) {
+    SettingsV1 o; prefs.getBytes("set", &o, sizeof(o));
+    for (int e = 0; e < 2; e++) gSet.eye[e] = {o.eyeStyle, o.irisMode, o.irisColor, o.eyelidColor};
+    gSet.brightness = o.brightness; gSet.autoBlink = o.autoBlink; gSet.volume = o.volume;
+    gSet.wakeDistMm = o.wakeDistMm; gSet.leanDistMm = o.leanDistMm; gSet.sleepAfterS = o.sleepAfterS;
+    gSet.flipGazeX = o.flipGazeX; gSet.flipGazeY = o.flipGazeY;
+    memcpy(gSet.wifiPass, o.wifiPass, sizeof(gSet.wifiPass));
   }
   prefs.end();
   gSet.wifiPass[sizeof(gSet.wifiPass) - 1] = 0;
