@@ -167,7 +167,7 @@ static Antic    antic = AN_NONE;
 static uint32_t anticStartMs = 0, anticDurMs = 0;
 
 static void startAntic(Antic a) {
-  static const uint16_t dur[] = {0, 450, 450, 1500, 2000, 1800, 1700, 2600};
+  static const uint16_t dur[] = {0, 500, 500, 1600, 2600, 2000, 1700, 2600};
   antic = a; anticStartMs = millis(); anticDurMs = dur[a];
 }
 
@@ -181,9 +181,9 @@ static bool evalAntic(uint8_t eye, uint32_t now, float &dx, float &dy, float &li
   switch (antic) {
     case AN_WINK_L: if (eye == 0) lidE = 255 * sinf(PI * f); break;
     case AN_WINK_R: if (eye == 1) lidE = 255 * sinf(PI * f); break;
-    case AN_ROLL:   dx = 380 * sinf(2 * PI * f) * env; dy = 380 * cosf(2 * PI * f) * env; break;
-    case AN_CROSS:  dx = (eye == 0 ? 260 : -260) * env; break;
-    case AN_LOOK:   dx = 420 * sinf(2 * PI * f) * env; break;
+    case AN_ROLL:   dx = 470 * sinf(2 * PI * f) * env; dy = 470 * cosf(2 * PI * f) * env; break;
+    case AN_CROSS:  dx = (eye == 0 ? 470 : -470) * env; break;
+    case AN_LOOK:   dx = 480 * sinf(2 * PI * f) * env; break;
     case AN_BLINK_SLOW:
       lidE = f < 0.35f ? 255 * f / 0.35f : f < 0.6f ? 255 : 255 * (1 - f) / 0.4f; break;
     case AN_NOD:                                                  // nodding off, then jerk awake
@@ -297,11 +297,12 @@ static void gazeAt(const Target &t, float dist) {
 }
 
 static void handlePhoneAction(uint8_t a, uint32_t now) {
+  Serial.printf("[puppet] phone action %u\n", a);
   switch (a) {
     case PA_WINK_L: startAntic(AN_WINK_L); break;
     case PA_WINK_R: startAntic(AN_WINK_R); break;
     case PA_BLINK:  startAntic(AN_BLINK_SLOW); break;
-    case PA_CROSS:  startAntic(AN_CROSS); break;
+    case PA_CROSS:  startAntic(AN_CROSS); gazeTX = gazeX = 512; gazeTY = gazeY = 512; break;
     case PA_ROLL:   startAntic(AN_ROLL); break;
     case PA_LOOK:   startAntic(AN_LOOK); break;
     case PA_CLOSE_TOGGLE: phoneClosed = !phoneClosed; break;
@@ -325,6 +326,13 @@ void puppetUpdate(uint32_t nowMicros) {
   if (cmd == 200) dfSend(0x06, effectiveVolume());
   else if (cmd >= 100) playTrack(cmd - 100, 1000, true);
 
+  // Serial test hook: "a<N>" fires phone action N (same as the phone buttons)
+  static char sbuf[8]; static uint8_t sn = 0;
+  while (Serial.available()) {
+    char c = Serial.read();
+    if (c == '\n' || c == '\r') { sbuf[sn] = 0; if (sn > 1 && sbuf[0] == 'a') puppetPhone(-1, -1, atoi(sbuf + 1)); sn = 0; }
+    else if (sn < 7) sbuf[sn++] = c;
+  }
   // Phone actions queued by the web task
   while (actTail != actHead) { uint8_t a = actQ[actTail]; actTail = (actTail + 1) & 7; handlePhoneAction(a, now); }
   if (phoneActive && now - phoneLastMs > 90000) { phoneActive = false; phoneClosed = false; Serial.println("[puppet] phone idle, back to normal"); }

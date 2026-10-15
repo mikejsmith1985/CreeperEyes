@@ -25,9 +25,10 @@ select,input[type=password],input[type=text]{background:#0b0f0c;color:var(--text
 .sw{appearance:none;width:46px;height:26px;border-radius:13px;background:#333;position:relative;cursor:pointer;transition:.2s}
 .sw:checked{background:var(--acc)}.sw:before{content:"";position:absolute;width:20px;height:20px;border-radius:50%;background:#fff;top:3px;left:3px;transition:.2s}.sw:checked:before{left:23px}
 .btns{display:flex;flex-wrap:wrap;gap:8px}button{background:#223024;color:var(--text);border:1px solid var(--line);border-radius:10px;padding:10px 14px;font:inherit;cursor:pointer}
+button:active{transform:scale(.93)}button.busy{opacity:.6}button.ok{background:#3f6b2a!important;border-color:var(--acc)!important;color:#fff!important}button.err{background:#7a2a22!important;border-color:#e05a4a!important}
 button.pri{background:var(--acc);color:#10200a;border-color:var(--acc);font-weight:600}button.warn{color:var(--warn)}
 #status{display:grid;grid-template-columns:1fr 1fr;gap:8px}.stat{background:#0b0f0c;border-radius:10px;padding:8px 10px}.stat b{display:block;font-size:18px}
-.stat span{color:var(--mute);font-size:12px}#toast{position:fixed;left:50%;bottom:18px;transform:translateX(-50%);background:var(--acc);color:#10200a;padding:8px 14px;border-radius:20px;font-weight:600;opacity:0;transition:.3s}
+.stat span{color:var(--mute);font-size:12px}#toast{position:fixed;z-index:9;left:50%;bottom:calc(18px + env(safe-area-inset-bottom));transform:translateX(-50%);background:var(--acc);color:#10200a;padding:8px 14px;border-radius:20px;font-weight:600;opacity:0;transition:.3s}
 #toast.on{opacity:1}
 .eyebox{border-top:1px solid var(--line);margin-top:4px;padding-top:6px}.eyett{font-size:14px;margin:6px 0 0;color:var(--acc)}
 body.linked .eyebox[data-eye=R]{display:none}body.linked .eyett{display:none}
@@ -43,19 +44,19 @@ progress{width:100%;height:10px;accent-color:var(--acc)}
  <div id="status"><div class="stat"><span>Monster</span><b id="st">…</b></div><div class="stat"><span>Radar sees</span><b id="rd">…</b></div>
   <div class="stat" style="grid-column:1/3"><span>What the radar sees (top view, bust at the bottom; green dot = where he's looking)</span><canvas id="rv" width="600" height="300" style="width:100%;margin-top:6px;border-radius:8px;background:#0b0f0c"></canvas></div>
   <div class="stat"><span>Visitors tonight</span><b id="vt">…</b></div><div class="stat"><span>All-time</span><b id="va">…</b></div></div>
- <div class="btns" style="margin-top:10px"><button onclick="cmd('wake')">Wake up</button><button onclick="cmd('sleep')">Go to sleep</button><button onclick="resetVisits()">Reset tonight</button></div>
+ <div class="btns" style="margin-top:10px"><button onclick="cmd(this,'wake')">Wake up</button><button onclick="cmd(this,'sleep')">Go to sleep</button><button onclick="resetVisits(this)">Reset tonight</button></div>
 </section>
 
 <section class="pp" id="pup"><h2>Puppet mode</h2>
  <div id="pnote">Drag on the pad to steer his eyes. He goes back to normal 90 s after your last touch, or when you tap Release.</div>
  <div id="pad"><div id="dot"></div></div>
  <div class="btns">
-  <button onclick="pa(1)">Wink L</button><button onclick="pa(2)">Wink R</button><button onclick="pa(3)">Slow blink</button><button onclick="pa(4)">Eyes shut/open</button>
-  <button onclick="pa(5)">Cross-eyed</button><button onclick="pa(6)">Eye roll</button><button onclick="pa(7)">Look around</button>
+  <button onclick="pa(this,1)">Wink L</button><button onclick="pa(this,2)">Wink R</button><button onclick="pa(this,3)">Slow blink</button><button onclick="pa(this,4)">Eyes shut/open</button>
+  <button onclick="pa(this,5)">Cross-eyed</button><button onclick="pa(this,6)">Eye roll</button><button onclick="pa(this,7)">Look around</button>
  </div>
  <div class="btns" style="margin-top:8px">
-  <button onclick="pa(101)">Groan</button><button onclick="pa(102)">Growl</button><button onclick="pa(107)">Roar</button><button onclick="pa(106)">Mmm…</button><button onclick="pa(110)">Chuckle</button><button onclick="pa(108)">Snore</button>
-  <button class="pri" onclick="pa(20)">Release</button>
+  <button onclick="pa(this,101)">Groan</button><button onclick="pa(this,102)">Growl</button><button onclick="pa(this,107)">Roar</button><button onclick="pa(this,106)">Mmm…</button><button onclick="pa(this,110)">Chuckle</button><button onclick="pa(this,108)">Snore</button>
+  <button class="pri" onclick="pa(this,20)">Release</button>
  </div>
 </section>
 
@@ -77,7 +78,7 @@ progress{width:100%;height:10px;accent-color:var(--acc)}
 
 <section><h2>Sound</h2>
  <div class="row"><label>Volume</label><input type="range" min="0" max="30" data-k="volume"><output></output></div>
- <div class="btns"><button onclick="cmd('sound:1')">Groan</button><button onclick="cmd('sound:2')">Growl 1</button><button onclick="cmd('sound:3')">Growl 2</button><button onclick="cmd('sound:6')">Mmm…</button><button onclick="cmd('sound:7')">Roar</button><button onclick="cmd('sound:9')">Hmm?</button><button onclick="cmd('sound:10')">Chuckle</button><button onclick="cmd('sound:8')">Snore</button></div>
+ <div class="btns"><button onclick="cmd(this,'sound:1')">Groan</button><button onclick="cmd(this,'sound:2')">Growl 1</button><button onclick="cmd(this,'sound:3')">Growl 2</button><button onclick="cmd(this,'sound:6')">Mmm…</button><button onclick="cmd(this,'sound:7')">Roar</button><button onclick="cmd(this,'sound:9')">Hmm?</button><button onclick="cmd(this,'sound:10')">Chuckle</button><button onclick="cmd(this,'sound:8')">Snore</button></div>
 </section>
 
 <section><h2>Behaviour</h2>
@@ -110,7 +111,7 @@ progress{width:100%;height:10px;accent-color:var(--acc)}
 <div id="toast">Saved</div>
 <script>
 const $=s=>document.querySelectorAll(s);let t,S={};
-function toast(m){const e=document.getElementById('toast');e.textContent=m||'Saved';e.classList.add('on');clearTimeout(t);t=setTimeout(()=>e.classList.remove('on'),1200)}
+function toast(m){const e=document.getElementById('toast');e.textContent=m||'Saved';e.classList.add('on');clearTimeout(t);t=setTimeout(()=>e.classList.remove('on'),1400)}
 function fmt(el){const u=el.dataset.u,v=+el.value;return u=='m'?(v/1000).toFixed(v<1000?2:1)+' m':u=='s'?v+' s':v}
 function key(el){const b=el.closest('.eyebox');return el.dataset.k+(b?b.dataset.eye:'')}
 function fill(s){S=s;
@@ -128,7 +129,13 @@ function send(el){const k=key(el),v=val(el),b={[k]:v};
  if(k=='linkEyes'&&v==1)['style','irisMode','irisColor','eyelidColor'].forEach(n=>b[n+'R']=S[n+'L']);
  clearTimeout(timers[k]);timers[k]=setTimeout(async()=>{fill(await post('/api/set',b));toast()},150)}
 $('[data-k]').forEach(el=>{el.addEventListener('input',()=>{const o=el.parentElement.querySelector('output');if(o)o.textContent=fmt(el);send(el)})});
-async function cmd(c){await post('/api/cmd',{c});toast(c.startsWith('sound')?'Playing':'OK')}
+// Every button lights green when the monster confirms it, red if it didn't get through.
+async function act(b,url,body,msg){if(b){b.classList.remove('ok','err');b.classList.add('busy')}
+ try{const r=await fetch(url,{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:new URLSearchParams(body)});
+  if(!r.ok)throw 0;const j=await r.json();if(b){b.classList.remove('busy');b.classList.add('ok');setTimeout(()=>b.classList.remove('ok'),900)}
+  toast((msg||(b?b.textContent:'OK'))+' \u2713');return j}
+ catch(e){if(b){b.classList.remove('busy');b.classList.add('err');setTimeout(()=>b.classList.remove('err'),1500)}toast('Not received \u2013 check Wi-Fi');}}
+function cmd(b,c){return act(b,'/api/cmd',{c})}
 async function setPw(){const p=document.getElementById('pw').value;if(p.length<8){toast('8+ characters');return}
  await post('/api/set',{wifiPass:p});toast('Password saved');document.getElementById('pw').value=''}
 async function resetAll(){if(!confirm('Reset all settings (except Wi-Fi password)?'))return;fill(await post('/api/reset',{}));toast('Reset')}
@@ -148,8 +155,8 @@ function drawRadar(s){const c=$1('rv'),g=c.getContext('2d'),W=c.width,H=c.height
  const a=(s.gx-512)/470*0.79*(S.flipGazeX?-1:1),L=H*0.9,ex=W/2+Math.sin(a)*L,ey=H-Math.cos(a)*L;
  g.strokeStyle='#8fd16a';g.lineWidth=3;g.beginPath();g.moveTo(W/2,H);g.lineTo(ex,ey);g.stroke();g.lineWidth=1;
  g.fillStyle='#8fd16a';g.beginPath();g.arc(ex,ey,8,0,7);g.fill()}
-async function resetVisits(){await post('/api/visits/reset',{});toast('Reset')}
-function pa(a){post('/api/puppet',{a});$1('pup').classList.add('on')}
+function resetVisits(b){return act(b,'/api/visits/reset',{},'Visitors reset')}
+function pa(b,a){$1('pup').classList.add('on');return act(b,'/api/puppet',{a})}
 (function(){const pad=$1('pad'),dot=$1('dot');let last=0,pend=null,busy=false;
  function sendXY(){if(busy||!pend)return;busy=true;const b=pend;pend=null;post('/api/puppet',b).finally(()=>{busy=false;setTimeout(sendXY,60)})}
  function mv(e){const r=pad.getBoundingClientRect();let fx=(e.clientX-r.left)/r.width,fy=(e.clientY-r.top)/r.height;
