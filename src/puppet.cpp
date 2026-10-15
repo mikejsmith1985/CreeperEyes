@@ -84,6 +84,33 @@ static void dfSend(uint8_t cmd, uint16_t param) {
   soundSerial.write(m, 10);
 }
 
+// Read and log whatever the DFPlayer says back, so wiring/card problems show in the serial monitor.
+static bool dfHeard = false;
+static void pollDf() {
+  static uint8_t f[10]; static uint8_t n = 0;
+  while (soundSerial.available()) {
+    uint8_t b = soundSerial.read();
+    if (n == 0 && b != 0x7E) continue;
+    f[n++] = b;
+    if (n < 10) continue;
+    n = 0;
+    if (f[9] != 0xEF) continue;
+    dfHeard = true;
+    uint8_t cmd = f[3]; uint16_t p = (f[5] << 8) | f[6];
+    const char *what = "";
+    switch (cmd) {
+      case 0x3F: what = (p & 0x02) ? "ready, SD card found" : "ready, NO SD card"; break;
+      case 0x3A: what = "card inserted"; break;
+      case 0x3B: what = "card removed"; break;
+      case 0x3D: what = "finished track"; break;
+      case 0x40: what = p == 6 ? "ERROR: file not found" : p == 1 ? "ERROR: busy / card not ready" : "ERROR"; break;
+      case 0x41: what = "ack"; break;
+      case 0x48: what = "files on card"; break;
+    }
+    Serial.printf("[sound] DFPlayer says %02X %u %s\n", cmd, p, what);
+  }
+}
+
 // Plays a track unless another sound started less than minGapMs ago (or force).
 static void playTrack(uint16_t n, uint32_t lengthMs, bool force = false) {
   uint32_t now = millis();
@@ -119,9 +146,13 @@ static void setState(State s) {
 void puppetSetup() {
   radarSerial.begin(RADAR_BAUD, SERIAL_8N1, RADAR_RX_PIN, RADAR_TX_PIN);
   soundSerial.begin(SOUND_BAUD, SERIAL_8N1, SOUND_RX_PIN, SOUND_TX_PIN);
-  delay(1200);                       // DFPlayer needs ~1 s after power-up
+  // DFPlayer needs 1-3 s after power-up (clones are slower). Wait for its "ready" message.
+  for (uint32_t t0 = millis(); millis() - t0 < 3000 && !dfHeard; ) { pollDf(); delay(20); }
+  if (!dfHeard) Serial.println("[sound] no reply from DFPlayer yet (check its power and the P26 <- TX wire)");
   dfSend(0x06, gSet.volume);         // set volume
   delay(100);
+  dfSend(0x48, 0);                   // ask how many files are on the card
+  for (uint32_t t0 = millis(); millis() - t0 < 300; ) { pollDf(); delay(10); }
   playTrack(TRK_WAKE, 3000, true);   // boot test: you should hear the groan once
   Serial.println("[puppet] started. Radar on GPIO32/33 @256000, DFPlayer on GPIO26/25 @9600");
 }
@@ -138,6 +169,7 @@ void puppetUpdate(uint32_t nowMicros) {
   lastUpdateMs = now;
 
   pollRadar();
+  pollDf();
 
   int cmd = pendingCmd; pendingCmd = 0;
   if (cmd == 200) dfSend(0x06, gSet.volume);
