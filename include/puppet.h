@@ -30,6 +30,7 @@
 #define TRK_GROWL_LAST 5
 #define TRK_LEAN       6           // /mp3/0006.mp3  "Mmm..." when someone leans in
 
+void puppetEarly();                      // call first thing in setup()
 void puppetSetup();                      // call once in setup()
 void puppetUpdate(uint32_t nowMicros);   // call once per pair of eye frames
 

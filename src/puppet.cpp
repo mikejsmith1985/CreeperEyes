@@ -88,8 +88,11 @@ static void dfSend(uint8_t cmd, uint16_t param) {
 static bool dfHeard = false;
 static void pollDf() {
   static uint8_t f[10]; static uint8_t n = 0;
+  static char hex[200]; static int hl = 0; static uint32_t lastByteMs = 0;
   while (soundSerial.available()) {
     uint8_t b = soundSerial.read();
+    lastByteMs = millis();
+    if (hl < 190) hl += snprintf(hex + hl, sizeof(hex) - hl, "%02X ", b);
     if (n == 0 && b != 0x7E) continue;
     f[n++] = b;
     if (n < 10) continue;
@@ -109,6 +112,11 @@ static void pollDf() {
     }
     Serial.printf("[sound] DFPlayer says %02X %u %s\n", cmd, p, what);
   }
+  if (hl && millis() - lastByteMs > 30) { Serial.printf("[sound] raw: %s\n", hex); hl = 0; }
+}
+
+void puppetEarly() {   // start listening to the DFPlayer as early as possible so its power-up message is caught
+  soundSerial.begin(SOUND_BAUD, SERIAL_8N1, SOUND_RX_PIN, SOUND_TX_PIN);
 }
 
 // Plays a track unless another sound started less than minGapMs ago (or force).
@@ -145,13 +153,14 @@ static void setState(State s) {
 
 void puppetSetup() {
   radarSerial.begin(RADAR_BAUD, SERIAL_8N1, RADAR_RX_PIN, RADAR_TX_PIN);
-  soundSerial.begin(SOUND_BAUD, SERIAL_8N1, SOUND_RX_PIN, SOUND_TX_PIN);
   // DFPlayer needs 1-3 s after power-up (clones are slower). Wait for its "ready" message.
   for (uint32_t t0 = millis(); millis() - t0 < 3000 && !dfHeard; ) { pollDf(); delay(20); }
   if (!dfHeard) Serial.println("[sound] no reply from DFPlayer yet (check its power and the P26 <- TX wire)");
   dfSend(0x06, gSet.volume);         // set volume
   delay(100);
   dfSend(0x48, 0);                   // ask how many files are on the card
+  delay(150);
+  dfSend(0x43, 0);                   // ask current volume
   for (uint32_t t0 = millis(); millis() - t0 < 300; ) { pollDf(); delay(10); }
   playTrack(TRK_WAKE, 3000, true);   // boot test: you should hear the groan once
   Serial.println("[puppet] started. Radar on GPIO32/33 @256000, DFPlayer on GPIO26/25 @9600");

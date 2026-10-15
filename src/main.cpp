@@ -94,6 +94,7 @@ void setup(void) {
   uint8_t e;
 
   Serial.begin(921600);
+  puppetEarly();
   settingsLoad();
   randomSeed(analogRead(A3)); // Seed random() from floating analog input
 
