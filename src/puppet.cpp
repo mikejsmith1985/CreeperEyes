@@ -172,6 +172,7 @@ static uint32_t anticStartMs = 0, anticDurMs = 0;
 static void startAntic(Antic a) {
   static const uint16_t dur[] = {0, 500, 500, 1600, 2600, 2000, 1700, 2600};
   antic = a; anticStartMs = millis(); anticDurMs = dur[a];
+  Serial.printf("[puppet] antic %u (%u ms)\n", a, anticDurMs);
 }
 
 // Adds this antic's offsets for one eye. Returns false when no antic is running.
@@ -179,7 +180,7 @@ static bool evalAntic(uint8_t eye, uint32_t now, float &dx, float &dy, float &li
   dx = dy = lidE = 0;
   if (antic == AN_NONE) return false;
   float f = since(now, anticStartMs) / (float)anticDurMs;
-  if (f >= 1) { antic = AN_NONE; return false; }
+  if (f >= 1) { antic = AN_NONE; Serial.printf("[puppet] antic done after %u ms\n", since(now, anticStartMs)); return false; }
   float env = fminf(1.0f, fminf(f * 4, (1 - f) * 4));            // ease in / out
   switch (antic) {
     case AN_WINK_L: if (eye == 0) lidE = 255 * sinf(PI * f); break;
