@@ -6,14 +6,14 @@
 | LD2450 radar | 5V / GND | 5V / GND |
 | | TX | GPIO 32 |
 | | RX | GPIO 33 |
-> **DFPlayer orientation:** the pin labels are on the underside, and clones (e.g. HiLetgo HW-247A) have none. Hold it with the
-> microSD slot pointing **down** (card toward you as you read the "DFPlayer Mini" text upside-down): VCC is then the top-left pin,
-> followed by RX, TX, DAC_R, DAC_L, SPK_1, GND, SPK_2. Upside-down, it stays silent and echoes commands back.
-
 | DFPlayer Mini | VCC / GND | 5V / GND (470 uF cap across VCC-GND, stripe to GND) |
 | | RX | 1 kOhm resistor -> GPIO 25 |
 | | TX | GPIO 26 |
 | | SPK_1 / SPK_2 | speaker |
+
+> **DFPlayer orientation:** the pin labels are on the underside, and clones (e.g. HiLetgo HW-247A) have none. Hold it with the
+> microSD slot pointing **down**: VCC is then the top-left pin,
+> followed by RX, TX, DAC_R, DAC_L, SPK_1, GND, SPK_2. Upside-down, it stays silent and echoes commands back.
 
 ## microSD card (FAT32, <= 32 GB)
 Create a folder named `mp3` and add:
