@@ -289,10 +289,10 @@ static float approach(float cur, float target, float rate, float dtS) {
 
 static void gazeAt(const Target &t, float dist) {
   float ang = atan2f((float)t.x, (float)t.y);                  // radians, 0 = straight ahead
-  float gx = 512 + (gSet.flipGazeX ? -1 : 1) * (ang / 1.05f) * 430;   // +-60 deg -> +-430
+  float gx = 512 + (gSet.flipGazeX ? -1 : 1) * (ang / 0.79f) * 470;   // +-45 deg -> +-470 (full swing)
   float down = constrain((2000.0f - dist) / 1600.0f, 0.0f, 1.0f);  // closer kids -> look down
   float gy = 512 - (gSet.flipGazeY ? -1 : 1) * down * 300;
-  gazeTX = constrain(gx, 80.0f, 943.0f);
+  gazeTX = constrain(gx, 40.0f, 983.0f);
   gazeTY = constrain(gy, 80.0f, 943.0f);
 }
 
@@ -599,12 +599,18 @@ void puppetPhone(int x, int y, int action) {
 String puppetStatusJson() {
   static const char *names[] = {"no radar", "asleep", "waking", "awake"};
   const char *st = phoneActive ? "puppeted" : staring ? "staring" : transformStyle >= 0 ? "transformed" : names[state];
-  char b[260];
-  snprintf(b, sizeof(b),
+  char b[420];
+  int n = snprintf(b, sizeof(b),
     "{\"state\":\"%s\",\"radar\":%s,\"person\":%s,\"people\":%d,\"x\":%d,\"y\":%d,\"dist\":%d,"
-    "\"visitsTonight\":%u,\"visitsTotal\":%u,\"puppet\":%s,\"saving\":%s}",
+    "\"visitsTonight\":%u,\"visitsTotal\":%u,\"puppet\":%s,\"saving\":%s,\"gx\":%d,\"gy\":%d,\"t\":[",
     st, radarAlive() ? "true" : "false", lastSomeone ? "true" : "false", peopleInZone,
     lastTarget.x, lastTarget.y, (int)lastDist, visitsTonight, visitsTotal,
-    phoneActive ? "true" : "false", saving ? "true" : "false");
+    phoneActive ? "true" : "false", saving ? "true" : "false", (int)outGX[0], (int)outGY[0]);
+  bool first = true;
+  for (auto &t : targets) if (t.valid && radarAlive()) {
+    n += snprintf(b + n, sizeof(b) - n, "%s[%d,%d,%d]", first ? "" : ",", t.x, t.y, inZone(t) ? 1 : 0);
+    first = false;
+  }
+  snprintf(b + n, sizeof(b) - n, "]}");
   return String(b);
 }

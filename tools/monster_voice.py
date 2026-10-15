@@ -15,6 +15,7 @@ SR = 44100
 OUT = sys.argv[1] if len(sys.argv) > 1 else 'sounds/mp3'
 os.makedirs(OUT, exist_ok=True)
 rng = np.random.default_rng(1931)
+LOUDER = 1.45          # small speakers: drive the files hot (compressed, near full scale)
 GIANT = 0.80            # formant scale: < 1 = longer vocal tract = bigger creature
 
 VOWELS = {              # F1, F2, F3 (adult male), bandwidths added below
@@ -112,9 +113,10 @@ def reverb(x, mix=0.16):
     return out * (1 - mix) + wet / (np.abs(wet).max() + 1e-9) * np.abs(x).max() * mix
 
 def save(name, x, loud=0.2):
+    loud *= LOUDER
     x = signal.lfilter(*signal.butter(2, 55 / (SR / 2), 'high'), x)  # small speaker can't do sub-bass
     x = reverb(x)
-    x = np.tanh(1.6 * x / (np.abs(x).max() + 1e-9))
+    x = np.tanh(2.6 * x / (np.abs(x).max() + 1e-9))      # soft-clip: louder without harsh clipping
     f = int(0.02 * SR); x[:f] *= np.linspace(0, 1, f); x[-f:] *= np.linspace(1, 0, f)
     x = x * min(0.92 / np.abs(x).max(), loud / np.sqrt((x ** 2).mean()))   # even loudness
     x = np.clip(x, -0.95, 0.95)
@@ -157,7 +159,7 @@ save('0005', voice(2.8, [(0, 80), (0.25, 86), (0.7, 66), (1, 48)], [(0, 0), (0.1
                    [(0, 'OW'), (0.55, 'OW'), (1, 'UH')], rasp=0.18, breath=0.16, fry=[(0, 0.4), (0.3, 0.1), (1, 1)]))
 
 # 0006 pleased "Mmmm" (closed mouth hum, rises then settles)
-save('0006', loud=0.17, x=voice(2.1, [(0, 88), (0.3, 104), (0.7, 98), (1, 80)], [(0, 0), (0.15, 1), (0.75, 0.9), (1, 0)],
+save('0006', loud=0.26, x=voice(2.1, [(0, 88), (0.3, 104), (0.7, 98), (1, 80)], [(0, 0), (0.15, 1), (0.75, 0.9), (1, 0)],
                    [(0, 'MM'), (1, 'MM')], rasp=0.06, breath=0.05, nasal=0.85, fry=[(0, 0.2), (0.6, 0), (1, 0.7)]))
 
 # 0007 roar: loud, raw, rising then crashing
@@ -173,7 +175,7 @@ save('0008', loud=0.12, x=cat(
     breath_noise(1.4, [(0, 0), (0.15, 0.55), (0.6, 0.3), (1, 0)], 250, 1600)))
 
 # 0009 friendly, curious "hmm?" (rising)
-save('0009', loud=0.17, x=voice(1.4, [(0, 92), (0.55, 100), (1, 150)], [(0, 0), (0.15, 1), (0.8, 0.9), (1, 0)],
+save('0009', loud=0.26, x=voice(1.4, [(0, 92), (0.55, 100), (1, 150)], [(0, 0), (0.15, 1), (0.8, 0.9), (1, 0)],
                    [(0, 'MM'), (1, 'MM')], rasp=0.04, breath=0.04, nasal=0.8, fry=[(0, 0.3), (0.3, 0), (1, 0)]))
 
 # 0010 deep chuckle "heh heh heh heh"

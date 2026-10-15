@@ -41,6 +41,7 @@ progress{width:100%;height:10px;accent-color:var(--acc)}
 <main>
 <section><h2>Live</h2>
  <div id="status"><div class="stat"><span>Monster</span><b id="st">…</b></div><div class="stat"><span>Radar sees</span><b id="rd">…</b></div>
+  <div class="stat" style="grid-column:1/3"><span>What the radar sees (top view, bust at the bottom; green dot = where he's looking)</span><canvas id="rv" width="600" height="300" style="width:100%;margin-top:6px;border-radius:8px;background:#0b0f0c"></canvas></div>
   <div class="stat"><span>Visitors tonight</span><b id="vt">…</b></div><div class="stat"><span>All-time</span><b id="va">…</b></div></div>
  <div class="btns" style="margin-top:10px"><button onclick="cmd('wake')">Wake up</button><button onclick="cmd('sleep')">Go to sleep</button><button onclick="resetVisits()">Reset tonight</button></div>
 </section>
@@ -135,9 +136,18 @@ const $1=id=>document.getElementById(id);
 async function poll(){try{const s=await (await fetch('/api/status')).json();
  $1('st').textContent=s.state+(s.saving?' (power saver)':'');
  $1('rd').textContent=!s.radar?'not connected':s.person?(s.dist/1000).toFixed(2)+' m'+(s.people>1?' ('+s.people+' people)':''):'nobody';
- $1('vt').textContent=s.visitsTonight;$1('va').textContent=s.visitsTotal;
+ $1('vt').textContent=s.visitsTonight;drawRadar(s);$1('va').textContent=s.visitsTotal;
  $1('pup').classList.toggle('on',!!s.puppet)}catch(e){}
  setTimeout(poll,700)}
+function drawRadar(s){const c=$1('rv'),g=c.getContext('2d'),W=c.width,H=c.height,R=4000,sc=H/R;g.clearRect(0,0,W,H);
+ g.strokeStyle='#2a332b';g.fillStyle='#93a08f';g.font='20px system-ui';
+ for(let m=1;m<=4;m++){g.beginPath();g.arc(W/2,H,m*1000*sc,Math.PI,2*Math.PI);g.stroke();g.fillText(m+' m',W/2+4,H-m*1000*sc+20)}
+ g.strokeStyle='#3d5a32';g.beginPath();g.moveTo(W/2-1500*sc,H);g.lineTo(W/2-1500*sc,0);g.moveTo(W/2+1500*sc,H);g.lineTo(W/2+1500*sc,0);g.stroke();
+ if(!s.radar){g.fillStyle='#e0a84a';g.fillText('radar not connected',W/2-90,H/2);return}
+ (s.t||[]).forEach(p=>{g.fillStyle=p[2]?'#e6ece4':'#555';g.beginPath();g.arc(W/2+p[0]*sc,H-p[1]*sc,11,0,7);g.fill()});
+ const a=(s.gx-512)/470*0.79*(S.flipGazeX?-1:1),L=H*0.9,ex=W/2+Math.sin(a)*L,ey=H-Math.cos(a)*L;
+ g.strokeStyle='#8fd16a';g.lineWidth=3;g.beginPath();g.moveTo(W/2,H);g.lineTo(ex,ey);g.stroke();g.lineWidth=1;
+ g.fillStyle='#8fd16a';g.beginPath();g.arc(ex,ey,8,0,7);g.fill()}
 async function resetVisits(){await post('/api/visits/reset',{});toast('Reset')}
 function pa(a){post('/api/puppet',{a});$1('pup').classList.add('on')}
 (function(){const pad=$1('pad'),dot=$1('dot');let last=0,pend=null,busy=false;
