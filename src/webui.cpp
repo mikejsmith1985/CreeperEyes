@@ -3,6 +3,7 @@
 #include <WiFi.h>
 #include <WebServer.h>
 #include <DNSServer.h>
+#include <Update.h>
 #include "settings.h"
 #include "puppet.h"
 #include "webui.h"
@@ -13,6 +14,8 @@ static DNSServer dns;
 static const IPAddress apIP(192, 168, 4, 1);
 static String ssid;
 static volatile uint32_t saveAtMs = 0;   // debounce flash writes
+volatile bool gOtaActive = false;
+static String otaError;
 
 extern const char INDEX_HTML[] PROGMEM;
 
@@ -20,7 +23,7 @@ static String hex6(uint32_t c) { char b[8]; snprintf(b, sizeof(b), "#%06X", (uns
 static uint32_t parseHex(const String &s) { return strtoul(s.c_str() + (s.startsWith("#") ? 1 : 0), nullptr, 16) & 0xFFFFFF; }
 
 static void sendSettings() {
-  String j; j.reserve(900);
+  String j; j.reserve(1400);
   j += "{";
   const char *side[2] = {"L", "R"};
   for (int e = 0; e < 2; e++) {
@@ -37,6 +40,13 @@ static void sendSettings() {
     gSet.linkEyes ? "true" : "false", gSet.brightness, gSet.autoBlink ? "true" : "false", gSet.volume,
     gSet.wakeDistMm, gSet.leanDistMm, gSet.sleepAfterS,
     gSet.flipGazeX ? "true" : "false", gSet.flipGazeY ? "true" : "false", ssid.c_str());
+  j += b;
+  snprintf(b, sizeof(b),
+    "\"kidMode\":%s,\"randomEyes\":%s,\"transforms\":%s,\"jumpScares\":%s,\"antics\":%s,"
+    "\"sleepSounds\":%s,\"powerSaver\":%s,\"fw\":\"%s %s\",",
+    gSet.kidMode ? "true" : "false", gSet.randomEyes ? "true" : "false", gSet.transforms ? "true" : "false",
+    gSet.jumpScares ? "true" : "false", gSet.antics ? "true" : "false", gSet.sleepSounds ? "true" : "false",
+    gSet.powerSaver ? "true" : "false", __DATE__, __TIME__);
   j += b;
   j += "\"styles\":[";
   for (int i = 0; i < kEyeStyleCount; i++) { if (i) j += ","; j += "\""; j += kEyeStyles[i].name; j += "\""; }
@@ -67,6 +77,13 @@ static void handleSet() {
     else if (k == "sleepAfterS") gSet.sleepAfterS = constrain(n, 2, 120);
     else if (k == "flipGazeX")   gSet.flipGazeX   = on;
     else if (k == "flipGazeY")   gSet.flipGazeY   = on;
+    else if (k == "kidMode")     { gSet.kidMode   = on; volChanged = true; }
+    else if (k == "randomEyes")  gSet.randomEyes  = on;
+    else if (k == "transforms")  gSet.transforms  = on;
+    else if (k == "jumpScares")  gSet.jumpScares  = on;
+    else if (k == "antics")      gSet.antics      = on;
+    else if (k == "sleepSounds") gSet.sleepSounds = on;
+    else if (k == "powerSaver")  gSet.powerSaver  = on;
     else if (k == "wifiPass" && v.length() >= 8 && v.length() < sizeof(gSet.wifiPass))
       strlcpy(gSet.wifiPass, v.c_str(), sizeof(gSet.wifiPass));
   }
@@ -87,6 +104,49 @@ static void handleReset() {
   sendSettings();
 }
 
+// POST /api/puppet  x,y (0-1023, optional) a=action (optional)
+static void handlePuppet() {
+  int x = server.hasArg("x") ? server.arg("x").toInt() : -1;
+  int y = server.hasArg("y") ? server.arg("y").toInt() : -1;
+  int a = server.hasArg("a") ? server.arg("a").toInt() : 0;
+  puppetPhone(x, y, a);
+  server.send(200, "application/json", "{\"ok\":true}");
+}
+
+// Wireless firmware update: POST /update with the app .bin (multipart form upload)
+static void handleUpdateUpload() {
+  HTTPUpload &up = server.upload();
+  if (up.status == UPLOAD_FILE_START) {
+    otaError = "";
+    gOtaActive = true;
+    Serial.printf("[ota] receiving %s\n", up.filename.c_str());
+    if (!Update.begin(UPDATE_SIZE_UNKNOWN, U_FLASH)) otaError = Update.errorString();
+  } else if (up.status == UPLOAD_FILE_WRITE) {
+    if (otaError.length()) return;
+    if (up.totalSize == 0 && up.currentSize && up.buf[0] != 0xE9) {   // not an ESP32 app image
+      otaError = "That file isn't CreeperEyes firmware (use creepereyes-update.bin)";
+      Update.abort(); return;
+    }
+    if (Update.write(up.buf, up.currentSize) != up.currentSize) otaError = Update.errorString();
+  } else if (up.status == UPLOAD_FILE_END) {
+    if (!otaError.length() && !Update.end(true)) otaError = Update.errorString();
+    Serial.printf("[ota] %u bytes, %s\n", up.totalSize, otaError.length() ? otaError.c_str() : "OK");
+  } else if (up.status == UPLOAD_FILE_ABORTED) {
+    Update.abort(); otaError = "Upload interrupted";
+  }
+}
+
+static void handleUpdateDone() {
+  if (otaError.length()) {
+    gOtaActive = false;
+    server.send(500, "application/json", "{\"ok\":false,\"error\":\"" + otaError + "\"}");
+    return;
+  }
+  server.send(200, "application/json", "{\"ok\":true}");
+  delay(800);
+  ESP.restart();
+}
+
 static void redirectToPortal() {
   server.sendHeader("Location", String("http://") + apIP.toString() + "/", true);
   server.send(302, "text/plain", "");
@@ -97,6 +157,7 @@ static void webTask(void *) {
     dns.processNextRequest();
     server.handleClient();
     if (saveAtMs && (int32_t)(millis() - saveAtMs) > 0) { saveAtMs = 0; settingsSave(); Serial.println("[web] settings saved"); }
+    if (!gOtaActive) puppetSaveVisitsIfNeeded();
     vTaskDelay(2);
   }
 }
@@ -118,10 +179,13 @@ void webuiStart() {
   server.on("/api/set", HTTP_POST, handleSet);
   server.on("/api/cmd", HTTP_POST, handleCmd);
   server.on("/api/reset", HTTP_POST, handleReset);
+  server.on("/api/puppet", HTTP_POST, handlePuppet);
+  server.on("/api/visits/reset", HTTP_POST, [] { puppetResetVisitsTonight(); server.send(200, "application/json", puppetStatusJson()); });
+  server.on("/update", HTTP_POST, handleUpdateDone, handleUpdateUpload);
   server.on("/api/status", HTTP_GET, [] { server.send(200, "application/json", puppetStatusJson()); });
   server.onNotFound(redirectToPortal);   // makes phones pop the page up automatically
   server.begin();
 
-  xTaskCreatePinnedToCore(webTask, "web", 6144, nullptr, 1, nullptr, 0);
+  xTaskCreatePinnedToCore(webTask, "web", 8192, nullptr, 1, nullptr, 0);
   Serial.printf("[web] Wi-Fi \"%s\" password \"%s\" -> http://%s/\n", ssid.c_str(), gSet.wifiPass, apIP.toString().c_str());
 }

@@ -24,7 +24,7 @@
 #include "eyestyle.h"          // All selectable eye looks (see tools/eyegen.py)
 #include "puppet.h"            // Radar-driven behaviour + DFPlayer sound
 #include "settings.h"          // User settings (saved in flash)
-#include "webui.h"             // Wi-Fi settings page
+#include "webui.h"             // Wi-Fi settings page (+ gOtaActive)
 
 #define SCREEN_WIDTH  128
 #define SCREEN_HEIGHT 128
@@ -117,6 +117,7 @@ void setup(void) {
     digitalWrite(eye[e].cs, HIGH); // Deselect
   }
 
+  eyesLoad();                      // map eye graphics from the 'eyes' flash partition
   applySettings(); gSettingsDirty = false;   // eye looks, colours, brightness
   puppetSetup();                   // radar + sound (falls back to normal eyes if radar absent)
   webuiStart();                    // CreeperEyes-XXXX Wi-Fi + settings page
@@ -140,12 +141,22 @@ void drawEye( // Renders one eye.  Inputs must be pre-clipped & valid.
   uint8_t  lT) {    // Lower eyelid threshold value
 
   const EyeRender &r = er[e];
+  static uint16_t pBurst[SCREEN_WIDTH*SCREEN_HEIGHT]; // Full frame buffer possible on ESP32
+  if(!r.s) {                                          // eye graphics missing: dim red screen
+    for(int i = 0; i < SCREEN_WIDTH*SCREEN_HEIGHT; i++) pBurst[i] = 0x2000;
+    eye[e].display.startWrite();
+    eye[e].display.writeCommand(SSD1351_CMD_SETROW);    eye[e].display.write16(0); eye[e].display.write16(SCREEN_HEIGHT - 1);
+    eye[e].display.writeCommand(SSD1351_CMD_SETCOLUMN); eye[e].display.write16(0); eye[e].display.write16(SCREEN_WIDTH - 1);
+    eye[e].display.writeCommand(SSD1351_CMD_WRITERAM);
+    SPI.writePixels((uint8_t*)pBurst, sizeof(pBurst));
+    eye[e].display.endWrite();
+    return;
+  }
   const EyeStyle  &s = *r.s;
   uint8_t  screenX, screenY, scleraXsave;
   int16_t  irisX, irisY;
   uint16_t p, a, burstIdx;
   uint32_t d;
-  static uint16_t pBurst[SCREEN_WIDTH*SCREEN_HEIGHT]; // Full frame buffer possible on ESP32
 
   uint8_t  irisThreshold = (128 * (1023 - iScale) + 512) / 1024;
   if(irisThreshold < 1) irisThreshold = 1;
@@ -232,7 +243,8 @@ void applySettings() {
   for(uint8_t e = 0; e < NUM_EYES; e++) {
     const EyeLook &L = gSet.eye[e];
     EyeRender &r = er[e];
-    r.s       = &kEyeStyles[L.style < kEyeStyleCount ? L.style : 0];
+    int16_t st = puppetStyle(e) >= 0 ? puppetStyle(e) : L.style;   // temporary looks win
+    r.s       = kEyeStyleCount ? &kEyeStyles[st < kEyeStyleCount ? st : 0] : nullptr;
     r.eyelid  = rgb888to565(L.eyelidColor);
     r.recolor = L.irisMode == 1;
     if(r.recolor) {                   // keep the iris texture, change its hue
@@ -244,8 +256,7 @@ void applySettings() {
       }
     }
   }
-  uint8_t contrast = constrain(gSet.brightness, 1, 15);
-  for(uint8_t e = 0; e < NUM_EYES; e++) eye[e].display.sendCommand(SSD1351_CMD_CONTRASTMASTER, &contrast, 1);
+  // brightness is applied in frame() (it also handles the power saver)
 }
 
 void frame( // Process motion for a single frame of left or right eye
@@ -259,9 +270,20 @@ void frame( // Process motion for a single frame of left or right eye
   static uint16_t serNewEyeCtrl = 0;
   static uint16_t serEyeCtrl = 0;
 
+  if(gOtaActive) { delay(20); return; }      // wireless update in progress: stop drawing
   if(++eyeIndex >= NUM_EYES) eyeIndex = 0; // Cycle through eyes, 1 per call
   if(eyeIndex == 0) {
-    if(gSettingsDirty) { gSettingsDirty = false; applySettings(); }
+    static uint16_t styleVer = 0;
+    if(gSettingsDirty || styleVer != puppetStyleVersion()) {
+      gSettingsDirty = false; styleVer = puppetStyleVersion(); applySettings();
+    }
+    static uint8_t contrastNow = 0;            // power saver dims the screens while asleep
+    uint8_t c = constrain(puppetBrightness(), 1, 15);
+    if(c != contrastNow) {
+      contrastNow = c;
+      for(uint8_t e = 0; e < NUM_EYES; e++) eye[e].display.sendCommand(SSD1351_CMD_CONTRASTMASTER, &c, 1);
+    }
+    if(puppetFrameDelayMs()) delay(puppetFrameDelayMs());
     puppetUpdate(micros());                   // radar/sound behaviour, once per eye pair
   }
   { int16_t io = puppetIris(); if(io >= 0) iScale = io; }
@@ -317,7 +339,7 @@ void frame( // Process motion for a single frame of left or right eye
   }
   { // Radar gaze override: when someone is tracked the eyes follow them.
     int16_t gx, gy;
-    if(puppetGaze(&gx, &gy)) {
+    if(puppetGaze(eyeIndex, &gx, &gy)) {
       eyeX = eyeOldX = eyeNewX = gx;            // keep autonomous state in sync so it
       eyeY = eyeOldY = eyeNewY = gy;            // resumes smoothly when override ends
       eyeInMotion = false; eyeMoveStartTime = t; eyeMoveDuration = 1500000;
@@ -362,6 +384,7 @@ void frame( // Process motion for a single frame of left or right eye
   // Process motion, blinking and iris scale into renderable values
 
   // Iris scaling: the shared IRIS_MIN..IRIS_MAX animation is mapped onto this eye style's range
+  if(!er[eyeIndex].s) { drawEye(eyeIndex, 0, 0, 0, 0, 0); return; }
   const EyeStyle &st = *er[eyeIndex].s;
   int32_t iv = st.irisMin + ((int32_t)iScale - IRIS_MIN) * (st.irisMax - st.irisMin) / (IRIS_MAX - IRIS_MIN);
   iScale = constrain(iv, 0, 1023);
@@ -407,7 +430,7 @@ void frame( // Process motion for a single frame of left or right eye
   }
 
   // Extra lid closure from the behaviour module (sleeping, waking).
-  uint8_t lc = puppetLidClose();
+  uint8_t lc = puppetLidClose(eyeIndex);
   if(lc) {
     n          = n          + ((254 - n)          * lc) / 255;
     lThreshold = lThreshold + ((254 - lThreshold) * lc) / 255;

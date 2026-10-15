@@ -1,5 +1,6 @@
-// eyestyle.h -- one entry per selectable eye look. The tables themselves are generated
-// by tools/eyegen.py into src/eyedata/eyedata.inc and compiled by src/eyes.cpp.
+// eyestyle.h -- one entry per selectable eye look. The graphics live in their own flash
+// partition ('eyes', written from eyedata/eyes.bin built by tools/eyegen.py) so that the
+// app stays small enough for wireless updates. eyesLoad() maps it into memory at boot.
 #pragma once
 #include <Arduino.h>
 
@@ -13,5 +14,9 @@ struct EyeStyle {
   int16_t         irisMin,  irisMax;                     // pupil size range for this eye
 };
 
-extern const EyeStyle kEyeStyles[];
-extern const uint8_t  kEyeStyleCount;
+#define MAX_EYE_STYLES 24
+extern EyeStyle kEyeStyles[MAX_EYE_STYLES];
+extern uint8_t  kEyeStyleCount;
+
+bool eyesLoad();                         // false if the eyes partition is missing/blank
+int  eyeStyleFind(const char *name);     // index by name, -1 if not found

@@ -27,6 +27,16 @@ struct Settings {
 
   // Wi-Fi
   char     wifiPass[33];  // AP password (8+ chars), network name is CreeperEyes-XXXX
+
+  // ---- added in v3 (kept at the end so v2 saves load as a prefix) ----
+  uint32_t v3;            // 4-byte aligned start of the v3 block (unused)
+  bool     kidMode;       // softer sounds, no scares, friendlier eyes, quieter
+  bool     randomEyes;    // new random eye style each time he wakes up
+  bool     transforms;    // eyes turn into dragon eyes when someone lingers
+  bool     jumpScares;    // roar when someone rushes at him
+  bool     antics;        // winks, eye rolls, cross-eyes, nodding off
+  bool     sleepSounds;   // snores now and then while asleep
+  bool     powerSaver;    // dim + slow down after a while asleep
 };
 
 extern Settings gSet;

@@ -1,12 +1,13 @@
 #include "settings.h"
 #include <Preferences.h>
+#include <stddef.h>
 
 Settings gSet;
 volatile bool gSettingsDirty = true;   // apply once at boot
 
 static Preferences prefs;
 static const char *NS = "creeper";
-static const uint16_t kVersion = 2;    // bump if the struct layout changes
+static const uint16_t kVersion = 3;    // bump if the struct layout changes
 
 // Layout of version 1 (single look for both eyes), so old saves carry over.
 struct SettingsV1 {
@@ -22,6 +23,13 @@ void settingsReset() {
     gSet.eye[e].eyelidColor = 0x506850;   // muted Frankenstein green (= RGB565 0x534A)
   }
   gSet.linkEyes    = true;
+  gSet.kidMode     = false;
+  gSet.randomEyes  = false;
+  gSet.transforms  = true;
+  gSet.jumpScares  = true;
+  gSet.antics      = true;
+  gSet.sleepSounds = true;
+  gSet.powerSaver  = true;
   gSet.brightness  = 15;
   gSet.autoBlink   = true;
   gSet.volume      = 25;
@@ -39,6 +47,8 @@ void settingsLoad() {
   uint16_t ver = prefs.getUShort("ver", 0);
   if (ver == kVersion && prefs.getBytesLength("set") == sizeof(Settings)) {
     prefs.getBytes("set", &gSet, sizeof(Settings));
+  } else if (ver == 2 && prefs.getBytesLength("set") == offsetof(Settings, v3)) {
+    prefs.getBytes("set", &gSet, offsetof(Settings, v3));   // v3 fields keep their defaults
   } else if (ver == 1 && prefs.getBytesLength("set") == sizeof(SettingsV1)) {
     SettingsV1 o; prefs.getBytes("set", &o, sizeof(o));
     for (int e = 0; e < 2; e++) gSet.eye[e] = {o.eyeStyle, o.irisMode, o.irisColor, o.eyelidColor};

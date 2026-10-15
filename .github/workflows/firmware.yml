@@ -42,7 +42,11 @@ jobs:
           VERSION="$(date -u +%Y.%m.%d)-${GITHUB_SHA::7}"
           python -m esptool --chip esp32 merge_bin -o site/creepereyes.bin \
             --flash_mode keep --flash_freq keep --flash_size 4MB \
-            0x1000 $B/bootloader.bin 0x8000 $B/partitions.bin 0xe000 "$BOOT_APP0" 0x10000 $B/firmware.bin
+            0x1000 $B/bootloader.bin 0x8000 $B/partitions.bin 0xe000 "$BOOT_APP0" 0x10000 $B/firmware.bin \
+            0x250000 eyedata/eyes.bin
+          # app-only image for the wireless update page on the monster's own Wi-Fi
+          cp $B/firmware.bin site/creepereyes-update.bin
+          APP=$(stat -c%s $B/firmware.bin); echo "app size $APP of 1179648"; test $APP -le 1179648
           cat > site/manifest.json <<JSON
           {
             "name": "CreeperEyes",
@@ -59,7 +63,9 @@ jobs:
       - uses: actions/upload-artifact@v4
         with:
           name: creepereyes-firmware
-          path: site/creepereyes.bin
+          path: |
+            site/creepereyes.bin
+            site/creepereyes-update.bin
 
       - uses: actions/upload-pages-artifact@v3
         if: github.ref == 'refs/heads/main'
