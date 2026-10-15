@@ -66,7 +66,8 @@ static void pollRadar() {
 
 static bool radarAlive() { return radarSeen && (millis() - lastRadarFrameMs) < 3000; }
 
-static bool inZone(const Target &t) { return t.valid && t.y > 0 && abs(t.x) <= ZONE_HALF_WIDTH_MM; }
+static float distOf(const Target &t);
+static bool inZone(const Target &t) { return t.valid && t.y > 0 && abs(t.x) <= ZONE_HALF_WIDTH_MM && distOf(t) <= gSet.rangeMm; }
 static float distOf(const Target &t) { return sqrtf((float)t.x * t.x + (float)t.y * t.y); }
 
 // Nearest person inside the zone in front of the bust. Returns slot index or -1.
@@ -396,7 +397,7 @@ void puppetUpdate(uint32_t nowMicros) {
   bool scary = !gSet.kidMode;
 
   // ---------------- jump scare (works asleep or awake) ----------------
-  if (alive && !phone && scary && gSet.jumpScares && someone && dist < 2200 && closing > 1300 && now > scareCooldownMs) {
+  if (alive && !phone && scary && gSet.jumpScares && someone && dist < min(2200, (int)gSet.rangeMm) && closing > 1100 && now > scareCooldownMs) {
     Serial.printf("[puppet] JUMP SCARE (closing at %.0f mm/s)\n", closing);
     if (state == ASLEEP) {
       setState(AWAKE); lingerStartMs = now; nextAnticMs = now + random(8000, 15000);
@@ -456,7 +457,7 @@ void puppetUpdate(uint32_t nowMicros) {
         }
 
         // Staring contest: someone standing still close by
-        if (!staring && !phone && dist < 1800 && now > stareCooldownMs && peopleInZone == 1) {
+        if (!staring && !phone && dist < min(1600, (int)gSet.rangeMm) && now > stareCooldownMs && peopleInZone == 1) {
           if (abs(t.x - stareAX) > 120 || abs(t.y - stareAY) > 120) { stareAX = t.x; stareAY = t.y; stareAnchorMs = now; }
           else if (since(now, stareAnchorMs) > 2500) {
             staring = true; stareStartMs = now; stareLenMs = random(5000, 8000);

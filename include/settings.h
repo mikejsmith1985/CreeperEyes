@@ -37,6 +37,9 @@ struct Settings {
   bool     antics;        // winks, eye rolls, cross-eyes, nodding off
   bool     sleepSounds;   // snores now and then while asleep
   bool     powerSaver;    // dim + slow down after a while asleep
+
+  // ---- added in v4 ----
+  uint16_t rangeMm;       // radar ignores anyone further away than this (back-of-car: 2 m)
 };
 
 extern Settings gSet;

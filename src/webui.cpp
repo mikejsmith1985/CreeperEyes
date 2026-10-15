@@ -46,10 +46,10 @@ static void sendSettings() {
   j += b;
   snprintf(b, sizeof(b),
     "\"kidMode\":%s,\"randomEyes\":%s,\"transforms\":%s,\"jumpScares\":%s,\"antics\":%s,"
-    "\"sleepSounds\":%s,\"powerSaver\":%s,\"fw\":\"%s %s\",",
+    "\"sleepSounds\":%s,\"powerSaver\":%s,\"rangeMm\":%u,\"fw\":\"%s %s\",",
     gSet.kidMode ? "true" : "false", gSet.randomEyes ? "true" : "false", gSet.transforms ? "true" : "false",
     gSet.jumpScares ? "true" : "false", gSet.antics ? "true" : "false", gSet.sleepSounds ? "true" : "false",
-    gSet.powerSaver ? "true" : "false", __DATE__, __TIME__);
+    gSet.powerSaver ? "true" : "false", gSet.rangeMm, __DATE__, __TIME__);
   j += b;
   j += "\"styles\":[";
   for (int i = 0; i < kEyeStyleCount; i++) { if (i) j += ","; j += "\""; j += kEyeStyles[i].name; j += "\""; }
@@ -75,7 +75,8 @@ static void handleSet() {
     else if (k == "brightness")  gSet.brightness  = constrain(n, 1, 15);
     else if (k == "autoBlink")   gSet.autoBlink   = on;
     else if (k == "volume")      { gSet.volume    = constrain(n, 0, 30); volChanged = true; }
-    else if (k == "wakeDistMm")  gSet.wakeDistMm  = constrain(n, 500, 6000);
+    else if (k == "wakeDistMm")  gSet.wakeDistMm  = constrain(n, 300, 6000);
+    else if (k == "rangeMm")     gSet.rangeMm     = constrain(n, 500, 6000);
     else if (k == "leanDistMm")  gSet.leanDistMm  = constrain(n, 150, 1500);
     else if (k == "sleepAfterS") gSet.sleepAfterS = constrain(n, 2, 120);
     else if (k == "flipGazeX")   gSet.flipGazeX   = on;

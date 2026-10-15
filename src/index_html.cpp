@@ -89,7 +89,8 @@ progress{width:100%;height:10px;accent-color:var(--acc)}
  <div class="row"><label>Antics<small>Winks, eye rolls, cross-eyes, nodding off</small></label><input type="checkbox" class="sw" data-k="antics"></div>
  <div class="row"><label>Snores while asleep</label><input type="checkbox" class="sw" data-k="sleepSounds"></div>
  <div class="row"><label>Power saver<small>Dims the eyes after 20 s asleep</small></label><input type="checkbox" class="sw" data-k="powerSaver"></div>
- <div class="row"><label>Wakes up within</label><input type="range" min="500" max="5000" step="100" data-k="wakeDistMm" data-u="m"><output></output></div>
+ <div class="row"><label>Detection range<small>Ignores anyone further away (2 m suits the back of a car)</small></label><input type="range" min="500" max="5000" step="100" data-k="rangeMm" data-u="m"><output></output></div>
+ <div class="row"><label>Wakes up within</label><input type="range" min="300" max="3000" step="100" data-k="wakeDistMm" data-u="m"><output></output></div>
  <div class="row"><label>"Leaning in" within</label><input type="range" min="150" max="1200" step="50" data-k="leanDistMm" data-u="m"><output></output></div>
  <div class="row"><label>Falls asleep after</label><input type="range" min="2" max="60" data-k="sleepAfterS" data-u="s"><output></output></div>
  <div class="row"><label>Flip left/right<small>If the eyes look away from people</small></label><input type="checkbox" class="sw" data-k="flipGazeX"></div>
@@ -146,10 +147,11 @@ async function poll(){try{const s=await (await fetch('/api/status')).json();
  $1('vt').textContent=s.visitsTonight;drawRadar(s);$1('va').textContent=s.visitsTotal;
  $1('pup').classList.toggle('on',!!s.puppet)}catch(e){}
  setTimeout(poll,700)}
-function drawRadar(s){const c=$1('rv'),g=c.getContext('2d'),W=c.width,H=c.height,R=4000,sc=H/R;g.clearRect(0,0,W,H);
+function drawRadar(s){const c=$1('rv'),g=c.getContext('2d'),W=c.width,H=c.height,R=Math.max(1500,(S.rangeMm||2000)+500),sc=H/R;g.clearRect(0,0,W,H);
  g.strokeStyle='#2a332b';g.fillStyle='#93a08f';g.font='20px system-ui';
- for(let m=1;m<=4;m++){g.beginPath();g.arc(W/2,H,m*1000*sc,Math.PI,2*Math.PI);g.stroke();g.fillText(m+' m',W/2+4,H-m*1000*sc+20)}
- g.strokeStyle='#3d5a32';g.beginPath();g.moveTo(W/2-1500*sc,H);g.lineTo(W/2-1500*sc,0);g.moveTo(W/2+1500*sc,H);g.lineTo(W/2+1500*sc,0);g.stroke();
+ for(let m=0.5;m*1000<R;m+=0.5){g.beginPath();g.arc(W/2,H,m*1000*sc,Math.PI,2*Math.PI);g.stroke();g.fillText(m+' m',W/2+4,H-m*1000*sc+20)}
+ g.strokeStyle='#8fd16a';g.setLineDash([8,6]);g.beginPath();g.arc(W/2,H,(S.rangeMm||2000)*sc,Math.PI,2*Math.PI);g.stroke();g.setLineDash([]);
+ g.strokeStyle='#3d5a32';g.beginPath();g.moveTo(W/2-1200*sc,H);g.lineTo(W/2-1200*sc,0);g.moveTo(W/2+1200*sc,H);g.lineTo(W/2+1200*sc,0);g.stroke();
  if(!s.radar){g.fillStyle='#e0a84a';g.fillText('radar not connected',W/2-90,H/2);return}
  (s.t||[]).forEach(p=>{g.fillStyle=p[2]?'#e6ece4':'#555';g.beginPath();g.arc(W/2+p[0]*sc,H-p[1]*sc,11,0,7);g.fill()});
  const a=(s.gx-512)/470*0.79*(S.flipGazeX?-1:1),L=H*0.9,ex=W/2+Math.sin(a)*L,ey=H-Math.cos(a)*L;

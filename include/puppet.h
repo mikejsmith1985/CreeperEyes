@@ -21,7 +21,8 @@
 // ---------------- Tuning ----------------
 // Volume, distances, sleep delay, gaze direction and feature switches live in settings.h
 // and are edited from the web page.
-#define ZONE_HALF_WIDTH_MM  1500   // ignore people further to the side than this
+#define ZONE_HALF_WIDTH_MM  1200   // ignore people further to the side than this
+// (how far out he looks is the "Detection range" setting, default 2 m)
 #define RADAR_DEBUG_PRINT   0      // 1 = print radar targets to the serial monitor twice a second
 
 // Sound files: microSD card, folder named "mp3", files named by number.

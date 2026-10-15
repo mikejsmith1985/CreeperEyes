@@ -7,7 +7,7 @@ volatile bool gSettingsDirty = true;   // apply once at boot
 
 static Preferences prefs;
 static const char *NS = "creeper";
-static const uint16_t kVersion = 3;    // bump if the struct layout changes
+static const uint16_t kVersion = 4;    // bump if the struct layout changes
 
 // Layout of version 1 (single look for both eyes), so old saves carry over.
 struct SettingsV1 {
@@ -30,10 +30,11 @@ void settingsReset() {
   gSet.antics      = true;
   gSet.sleepSounds = true;
   gSet.powerSaver  = true;
+  gSet.rangeMm     = 2000;
   gSet.brightness  = 15;
   gSet.autoBlink   = true;
   gSet.volume      = 25;
-  gSet.wakeDistMm  = 2500;
+  gSet.wakeDistMm  = 1500;
   gSet.leanDistMm  = 450;
   gSet.sleepAfterS = 8;
   gSet.flipGazeX   = false;
@@ -47,6 +48,9 @@ void settingsLoad() {
   uint16_t ver = prefs.getUShort("ver", 0);
   if (ver == kVersion && prefs.getBytesLength("set") == sizeof(Settings)) {
     prefs.getBytes("set", &gSet, sizeof(Settings));
+  } else if (ver == 3 && prefs.getBytesLength("set") == offsetof(Settings, rangeMm)) {
+    prefs.getBytes("set", &gSet, offsetof(Settings, rangeMm));    // keeps the default 2 m range
+    if (gSet.wakeDistMm > 1800) gSet.wakeDistMm = 1500;               // old 2.5 m default is too far for a car
   } else if (ver == 2 && prefs.getBytesLength("set") == offsetof(Settings, v3)) {
     prefs.getBytes("set", &gSet, offsetof(Settings, v3));   // v3 fields keep their defaults
   } else if (ver == 1 && prefs.getBytesLength("set") == sizeof(SettingsV1)) {
