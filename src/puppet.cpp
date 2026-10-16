@@ -305,7 +305,7 @@ static float approach(float cur, float target, float rate, float dtS) {
 
 static void gazeAt(const Target &t, float dist) {
   float ang = atan2f((float)t.x, (float)t.y);                  // radians, 0 = straight ahead
-  float gx = 512 + (gSet.flipGazeX ? -1 : 1) * (ang / 0.79f) * 470;   // +-45 deg -> +-470 (full swing)
+  float gx = 512 + (gSet.flipGazeX ? -1 : 1) * (ang / 0.44f) * 470;   // +-25 deg -> full swing (people at 1-2 m rarely go wider)
   float down = constrain((2000.0f - dist) / 1600.0f, 0.0f, 1.0f);  // closer kids -> look down
   float gy = 512 - (gSet.flipGazeY ? -1 : 1) * down * 300;
   gazeTX = constrain(gx, 40.0f, 983.0f);
@@ -471,7 +471,7 @@ void puppetUpdate(uint32_t nowMicros) {
         } else {
           focusSlot = -1;
           gazeAt(t, dist);
-          gazeRate = staring ? 10 : 6;
+          gazeRate = staring ? 10 : 9;
         }
 
         // Staring contest: someone standing still close by
@@ -527,16 +527,16 @@ void puppetUpdate(uint32_t nowMicros) {
 
         // Antics while someone watches
         if (!phone && gSet.antics && !staring && antic == AN_NONE && now > nextAnticMs) {
-          static const Antic pool[] = {AN_WINK_L, AN_WINK_R, AN_ROLL, AN_CROSS};
-          static const Antic kidPool[] = {AN_WINK_L, AN_WINK_R, AN_WINK_L, AN_ROLL};
-          startAntic(gSet.kidMode ? kidPool[random(4)] : pool[random(4)]);
-          nextAnticMs = now + random(12000, 25000);
+          // only antics that keep his eyes on you; rolls/crosses made it look like he wasn't tracking
+          static const Antic pool[] = {AN_WINK_L, AN_WINK_R, AN_BLINK_SLOW, AN_WINK_L};
+          startAntic(pool[random(4)]);
+          nextAnticMs = now + random(20000, 40000);
         }
       } else {
         staring = false; focusSlot = -1;
         lingerStartMs = now;
         // Looking around for whoever just left
-        if (!phone && gSet.antics && antic == AN_NONE && since(now, lastSeenMs) > 1500 && now > nextAnticMs) {
+        if (!phone && gSet.antics && antic == AN_NONE && since(now, lastSeenMs) > 4000 && now > nextAnticMs) {
           startAntic(AN_LOOK); nextAnticMs = now + random(6000, 10000);
         }
       }

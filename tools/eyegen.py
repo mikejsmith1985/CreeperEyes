@@ -175,6 +175,20 @@ tables['fish']['sclera'] = img_table(fs)
 make_bloodshot().save(os.path.join(HERE, 'eyesrc', 'bloodshot-sclera.png'))
 fi.save(os.path.join(HERE, 'eyesrc', 'fish-iris.png'))
 
+# Small scleras leave the eye almost no room to move (the view window is 128 px, so the
+# travel is scleraW-128). Pad them to at least MIN_SCLERA px by repeating the edge pixels,
+# so every style can follow people. The iris/polar maps are centred, so nothing else moves.
+import numpy as np
+MIN_SCLERA = 192
+for sid, t in tables.items():
+    sw, sh, sv = t['sclera']
+    if sw >= MIN_SCLERA and sh >= MIN_SCLERA: continue
+    a = np.array(sv, dtype=np.uint16).reshape(sh, sw)
+    px, py = max(0, (MIN_SCLERA - sw) // 2), max(0, (MIN_SCLERA - sh) // 2)
+    a = np.pad(a, ((py, py), (px, px)), mode='edge')
+    t = dict(t); t['sclera'] = (a.shape[1], a.shape[0], [int(v) for v in a.ravel()]); tables[sid] = t
+    print('padded sclera', sid, (sw, sh), '->', a.shape[::-1])
+
 # ---------------------------------------------------------------------------------------
 # Binary blob for the 'eyes' flash partition (see partitions_creeper.csv, src/eyes.cpp)
 #   header: 'CEYE' u16 version u16 count, then count x 64-byte entries, then 4-aligned data
