@@ -32,12 +32,14 @@ for d in ([0,0,0.3],[0,0.25,0.15],[0.25,0,0.15],[-0.25,0,0.15],[0,-0.25,0.15]): 
 pieces=part.decompose(); part=max(pieces,key=lambda p:p.volume())
 pm=part.to_mesh(); tm=trimesh.Trimesh(pm.vert_properties[:,:3],pm.tri_verts)
 print('pieces',len(pieces),'watertight',tm.is_watertight,'vol cm3',round(tm.volume/1000,1),'collision check cm3',round((part.transform(M[:3,:4])^BM).volume()/1000,3))
-tw=tm.copy(); tw.apply_transform(M); tw.export('horn5_in_bust.stl')
-# print orientation: speaker back face down on the bed
-d=np.array(trimesh.transformations.euler_matrix(np.radians(pitch),np.radians(yaw),0,'sxyz')[:3,:3]@[0,0,1.0])
-R=trimesh.geometry.align_vectors(d,[0,0,-1.0])
-pr=tm.copy(); pr.apply_transform(R); pr.apply_translation(-pr.bounds[0]); pr.apply_translation([-(pr.bounds[1][0])/2,-(pr.bounds[1][1])/2,0])
-pr.export('horn5_print.stl'); print('print size',(pr.bounds[1]-pr.bounds[0]).round(1))
+tw=tm.copy(); tw.apply_transform(M); tw.export('speaker_horn_in_bust_position.stl')
+# print orientation: speaker back face down on the bed.
+# NOTE: the local (u,v,w) frame is LEFT-handed (det = -1), so the local-frame part is a mirror image.
+# Always derive the print file from the part in bust coordinates (tw) with a proper rotation.
+d=np.stack([u,v,w],1)@(trimesh.transformations.euler_matrix(np.radians(pitch),np.radians(yaw),0,'sxyz')[:3,:3]@[0,0,1.0])
+R=trimesh.geometry.align_vectors(d,[0,0,-1.0]); assert np.linalg.det(R[:3,:3])>0
+pr=tw.copy(); pr.apply_transform(R); pr.apply_translation(-pr.bounds[0]); pr.apply_translation([-(pr.bounds[1][0])/2,-(pr.bounds[1][1])/2,0])
+pr.export('CreeperEyes_SpeakerHorn.stl'); print('print size',(pr.bounds[1]-pr.bounds[0]).round(1))
 n=pr.face_normals; a=pr.area_faces; c=pr.triangles_center
 for lim in (45,50,60):
     bad=(n[:,2]<-np.sin(np.radians(lim)))&(c[:,2]>0.3); print('overhang >',lim,'deg from vertical mm2',round(a[bad].sum(),1))
