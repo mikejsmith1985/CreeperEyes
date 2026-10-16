@@ -194,7 +194,7 @@ static bool evalAntic(uint8_t eye, uint32_t now, float &dx, float &dy, float &li
     case AN_WINK_L: if (eye == 0) lidE = 255 * sinf(PI * f); break;
     case AN_WINK_R: if (eye == 1) lidE = 255 * sinf(PI * f); break;
     case AN_ROLL:   dx = 470 * sinf(2 * PI * f) * env; dy = 470 * cosf(2 * PI * f) * env; break;
-    case AN_CROSS:  dx = (eye == 0 ? 470 : -470) * env; break;
+    case AN_CROSS:  dx = (eye == 0 ? -470 : 470) * env; break;   // each eye towards the nose
     case AN_LOOK:   dx = 480 * sinf(2 * PI * f) * env; break;
     case AN_BLINK_SLOW:
       lidE = f < 0.35f ? 255 * f / 0.35f : f < 0.6f ? 255 : 255 * (1 - f) / 0.4f; break;
@@ -357,7 +357,7 @@ void puppetUpdate(uint32_t nowMicros) {
   }
   // Phone actions queued by the web task
   while (actTail != actHead) { uint8_t a = actQ[actTail]; actTail = (actTail + 1) & 7; handlePhoneAction(a, now); }
-  if (phoneActive && since(now, phoneLastMs) > 90000) { phoneActive = false; phoneClosed = false; Serial.println("[puppet] phone idle, back to normal"); }
+  if (phoneActive && since(now, phoneLastMs) > 30000) { phoneActive = false; phoneClosed = false; Serial.println("[puppet] phone idle, back to normal"); }
 
   // ---------------- what the radar sees ----------------
   bool alive = radarAlive();
@@ -616,8 +616,9 @@ void puppetCommand(const String &cmd) {
 }
 
 void puppetPhone(int x, int y, int action) {
-  phoneLastMs = millis();
-  if (action != PA_RELEASE) phoneActive = true;
+  // Only the pad (and close-eyes) take over his gaze; one-shot buttons (wink, cross, roll, sounds)
+  // play on top of whatever he's doing, so radar tracking keeps working.
+  if ((x >= 0 && y >= 0) || action == PA_CLOSE_TOGGLE) { phoneLastMs = millis(); phoneActive = true; }
   if (x >= 0 && y >= 0) {                  // same direction fixes as the radar gaze
     x = constrain(x, 0, 1023); y = constrain(y, 0, 1023);
     phoneX = gSet.flipGazeX ? 1023 - x : x;

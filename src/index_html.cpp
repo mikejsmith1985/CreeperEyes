@@ -51,7 +51,7 @@ progress{width:100%;height:10px;accent-color:var(--acc)}
 </section>
 
 <section class="pp" id="pup"><h2>Puppet mode</h2>
- <div id="pnote">Drag on the pad to steer his eyes. He goes back to normal 90 s after your last touch, or when you tap Release.</div>
+ <div id="pnote">Drag on the pad to steer his eyes. He goes back to following people 30 s after your last touch, or when you tap Release. The other buttons play straight away without stopping him following people.</div>
  <div id="pad"><div id="dot"></div></div>
  <div class="btns">
   <button onclick="pa(this,1)">Wink L</button><button onclick="pa(this,2)">Wink R</button><button onclick="pa(this,3)">Slow blink</button><button onclick="pa(this,4)">Eyes shut/open</button>
