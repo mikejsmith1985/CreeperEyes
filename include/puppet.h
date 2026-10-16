@@ -61,3 +61,4 @@ void    puppetPhone(int x, int y, int action); // x,y 0-1023 or -1; action Puppe
 void    puppetResetVisitsTonight();
 void    puppetSaveVisitsIfNeeded();          // call periodically from the web task
 String  puppetStatusJson();                  // live snapshot for the web page
+uint16_t puppetFilesOnCard();                // file count the DFPlayer reported at boot

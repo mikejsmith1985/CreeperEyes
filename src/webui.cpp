@@ -9,6 +9,7 @@
 #include "puppet.h"
 #include "webui.h"
 #include "eyestyle.h"
+#include "soundcfg.h"
 
 static WebServer server(80);
 static DNSServer dns;
@@ -184,6 +185,13 @@ void webuiStart() {
   server.on("/api/cmd", HTTP_POST, handleCmd);
   server.on("/api/reset", HTTP_POST, handleReset);
   server.on("/api/puppet", HTTP_POST, handlePuppet);
+  server.on("/api/sounds", HTTP_GET, [] { server.send(200, "application/json", soundCfgJson(puppetFilesOnCard())); });
+  server.on("/api/sounds", HTTP_POST, [] {
+    String err;
+    if (!soundCfgFromJson(server.arg("cfg"), err)) { server.send(400, "application/json", "{\"error\":\"" + err + "\"}"); return; }
+    server.send(200, "application/json", soundCfgJson(puppetFilesOnCard()));
+  });
+  server.on("/api/sounds/reset", HTTP_POST, [] { soundCfgReset(); server.send(200, "application/json", soundCfgJson(puppetFilesOnCard())); });
   server.on("/api/visits/reset", HTTP_POST, [] { puppetResetVisitsTonight(); server.send(200, "application/json", puppetStatusJson()); });
   server.on("/update", HTTP_POST, handleUpdateDone, handleUpdateUpload);
   server.on("/api/status", HTTP_GET, [] { server.send(200, "application/json", puppetStatusJson()); });

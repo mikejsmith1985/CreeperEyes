@@ -2,6 +2,7 @@
 #include "puppet.h"
 #include "settings.h"
 #include "eyestyle.h"
+#include "soundcfg.h"
 #include <HardwareSerial.h>
 #include <Preferences.h>
 #include <math.h>
@@ -102,9 +103,12 @@ static void playTrack(uint16_t n, uint32_t lengthMs, bool force = false);
 
 // Optional newer tracks fall back to the original six if they are not on the card.
 static uint16_t fallbackFor(uint16_t n) {
-  switch (n) { case TRK_ROAR: return TRK_GROWL_FIRST; case TRK_HMM: return TRK_LEAN;
-               case TRK_CHUCKLE: return TRK_LEAN; default: return 0; }
+  switch (n) { case TRK_ROAR: return soundRoleIsDefault(R_ROAR) ? TRK_GROWL_FIRST : 0;
+               case TRK_HMM: return soundRoleIsDefault(R_HMM) ? TRK_LEAN : 0;
+               case TRK_CHUCKLE: return soundRoleIsDefault(R_CHUCKLE) ? TRK_LEAN : 0; default: return 0; }
 }
+static uint16_t dfFiles = 0;
+uint16_t puppetFilesOnCard() { return dfFiles; }
 
 // Read whatever the DFPlayer says back; log it, and retry missing files with a fallback.
 static bool dfHeard = false;
@@ -124,6 +128,7 @@ static void pollDf() {
       Serial.printf("[sound] track %u missing on card%s\n", lastTrack, fb ? ", using fallback" : "");
       if (fb) playTrack(fb, 2500, true);
     } else if (cmd == 0x48) {
+      dfFiles = p;
       Serial.printf("[sound] DFPlayer ready, %u files on card\n", p);
     } else if (cmd == 0x40) {
       Serial.printf("[sound] DFPlayer error %u\n", p);
@@ -137,6 +142,7 @@ void puppetEarly() {   // start listening to the DFPlayer as early as possible
 
 static void playTrack(uint16_t n, uint32_t lengthMs, bool force) {
   uint32_t now = millis();
+  if (n == 0) return;                          // role left empty on purpose: stay silent
   if (!force && now < soundBusyUntilMs) return;
   dfSend(0x12, n);
   lastTrack = n; lastTrackMs = now;
@@ -215,7 +221,8 @@ static float    gazeX = 512, gazeY = 512, gazeTX = 512, gazeTY = 512, gazeRate =
 static int16_t  irisOverride = -1;
 static uint32_t irisUntilMs = 0;
 static uint32_t lastUpdateMs = 0;
-static volatile int pendingCmd = 0;     // 1 wake, 2 sleep, 100+N play sound N, 200 volume
+static volatile int pendingCmd = 0;     // 1 wake, 2 sleep, 1000+N play sound N
+static volatile bool pendingVolume = false;
 static Target   lastTarget = {false, 0, 0};
 static float    lastDist = 0;
 static bool     lastSomeone = false;
@@ -276,6 +283,7 @@ static int16_t pickRandomStyle() {
 }
 
 void puppetSetup() {
+  soundCfgLoad();
   visitPrefs.begin("creeperv", true); visitsTotal = visitPrefs.getUInt("total", 0); visitPrefs.end();
   radarSerial.begin(RADAR_BAUD, SERIAL_8N1, RADAR_RX_PIN, RADAR_TX_PIN);
   for (uint32_t t0 = millis(); millis() - t0 < 1500; ) { pollDf(); delay(20); }   // DFPlayer boot time
@@ -283,7 +291,7 @@ void puppetSetup() {
   delay(100);
   dfSend(0x48, 0);                   // ask how many files are on the card (logged when it answers)
   for (uint32_t t0 = millis(); millis() - t0 < 300; ) { pollDf(); delay(10); }
-  playTrack(gSet.kidMode ? TRK_HMM : TRK_WAKE, 3000, true);   // boot test
+  playTrack(soundForRole(gSet.kidMode ? R_HMM : R_WAKE), 3000, true);   // boot test
   Serial.printf("[puppet] started. %u visitors so far all-time\n", visitsTotal);
 }
 
@@ -328,8 +336,8 @@ void puppetUpdate(uint32_t nowMicros) {
   pollDf();
 
   int cmd = pendingCmd; pendingCmd = 0;
-  if (cmd == 200) dfSend(0x06, effectiveVolume());
-  else if (cmd >= 100) playTrack(cmd - 100, 1000, true);
+  if (pendingVolume) { pendingVolume = false; dfSend(0x06, effectiveVolume()); }
+  if (cmd >= 1000) playTrack(cmd - 1000, 1000, true);
 
   // Serial test hook: "a<N>" fires phone action N (same as the phone buttons)
   static char sbuf[8]; static uint8_t sn = 0;
@@ -405,7 +413,7 @@ void puppetUpdate(uint32_t nowMicros) {
     }
     lid = 0; lidTarget = 0; antic = AN_NONE; staring = false;
     irisOverride = kIrisMin; irisUntilMs = now + 1500;
-    playTrack(TRK_ROAR, 3000, true);
+    playTrack(soundForRole(R_ROAR), 3000, true);
     gazeAt(t, dist); gazeX = gazeTX; gazeY = gazeTY;               // snap straight to them
     scareCooldownMs = now + 25000; nextGrowlMs = now + random(20000, 35000);
   }
@@ -421,12 +429,12 @@ void puppetUpdate(uint32_t nowMicros) {
         nextTwitchMs = now + random(8000, 20000);
       }
       if (gSet.sleepSounds && !phone && now > nextSnoreMs) {
-        playTrack(TRK_SNORE, 3000);
+        playTrack(soundForRole(R_SNORE), 3000);
         nextSnoreMs = now + random(40000, 90000);
       }
       if (someone && dist < gSet.wakeDistMm) {
         setState(WAKING);
-        if (!phone) playTrack(gSet.kidMode ? TRK_HMM : TRK_WAKE, 3000, true);
+        if (!phone) playTrack(soundForRole(gSet.kidMode ? R_HMM : R_WAKE), 3000, true);
         irisOverride = kIrisMax; irisUntilMs = now + 1500;   // pupils snap wide
         lingerStartMs = now; nextAnticMs = now + random(8000, 15000);
         if (gSet.randomEyes) setVisitStyle(pickRandomStyle());
@@ -473,23 +481,23 @@ void puppetUpdate(uint32_t nowMicros) {
             if (since(now, stareStartMs) > stareLenMs) {                    // he loses: big slow blink
               staring = false; stareCooldownMs = now + 20000;
               startAntic(AN_BLINK_SLOW);
-              playTrack(TRK_CHUCKLE, 2500, true);
+              playTrack(soundForRole(R_CHUCKLE), 2500, true);
             }
           }
         }
 
         // Leaning in
         if (!phone && dist < gSet.leanDistMm && now > leanCooldownMs && !staring) {
-          if (gSet.kidMode) { startAntic(random(2) ? AN_WINK_L : AN_WINK_R); playTrack(TRK_CHUCKLE, 2500, true); }
-          else { playTrack(TRK_LEAN, 2500, true); irisOverride = kIrisMin; irisUntilMs = now + 2000; }
+          if (gSet.kidMode) { startAntic(random(2) ? AN_WINK_L : AN_WINK_R); playTrack(soundForRole(R_CHUCKLE), 2500, true); }
+          else { playTrack(soundForRole(R_LEAN), 2500, true); irisOverride = kIrisMin; irisUntilMs = now + 2000; }
           lid = 0;
           leanCooldownMs = now + 6000;
         }
 
         // Growls / friendly noises now and then
         if (!phone && now > nextGrowlMs && !staring) {
-          if (gSet.kidMode) { static const uint8_t soft[] = {TRK_HMM, TRK_CHUCKLE, TRK_LEAN}; playTrack(soft[random(3)], 3000); }
-          else playTrack(random(TRK_GROWL_FIRST, TRK_GROWL_LAST + 1), 3500);
+          if (gSet.kidMode) { static const SoundRole soft[] = {R_HMM, R_CHUCKLE, R_LEAN}; playTrack(soundForRole(soft[random(3)]), 3000); }
+          else playTrack(soundForRole(R_GROWL), 3500);
           nextGrowlMs = now + random(20000, 40000);
         }
 
@@ -502,7 +510,7 @@ void puppetUpdate(uint32_t nowMicros) {
           if (d >= 0) {
             setTransformStyle(d); transformEndMs = now + 6000; transformCooldownMs = now + 60000;
             irisOverride = kIrisMin; irisUntilMs = now + 1200;
-            playTrack(TRK_ROAR, 3000, true);
+            playTrack(soundForRole(R_ROAR), 3000, true);
             Serial.println("[puppet] transformation!");
           }
         }
@@ -587,12 +595,12 @@ uint16_t puppetStyleVersion() { return styleVersion; }
 uint8_t  puppetBrightness() { return saving ? max(1, gSet.brightness / 4) : gSet.brightness; }
 uint8_t  puppetFrameDelayMs() { return saving ? 35 : 0; }
 
-void puppetApplyVolume() { pendingCmd = 200; }   // sent from the render thread
+void puppetApplyVolume() { pendingVolume = true; }   // sent from the render thread
 
 void puppetCommand(const String &cmd) {
   if (cmd == "wake") pendingCmd = 1;
   else if (cmd == "sleep") pendingCmd = 2;
-  else if (cmd.startsWith("sound:")) pendingCmd = 100 + constrain(cmd.substring(6).toInt(), 1, 99);
+  else if (cmd.startsWith("sound:")) pendingCmd = 1000 + constrain(cmd.substring(6).toInt(), 1, 2999);
 }
 
 void puppetPhone(int x, int y, int action) {

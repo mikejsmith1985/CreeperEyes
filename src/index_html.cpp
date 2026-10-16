@@ -30,6 +30,9 @@ button.pri{background:var(--acc);color:#10200a;border-color:var(--acc);font-weig
 #status{display:grid;grid-template-columns:1fr 1fr;gap:8px}.stat{background:#0b0f0c;border-radius:10px;padding:8px 10px}.stat b{display:block;font-size:18px}
 .stat span{color:var(--mute);font-size:12px}#toast{position:fixed;z-index:9;left:50%;bottom:calc(18px + env(safe-area-inset-bottom));transform:translateX(-50%);background:var(--acc);color:#10200a;padding:8px 14px;border-radius:20px;font-weight:600;opacity:0;transition:.3s}
 #toast.on{opacity:1}
+.note{color:var(--mute);font-size:12px;margin:6px 0}
+.srow{display:flex;gap:6px;align-items:center;margin:6px 0}.srow input{min-width:0}.srow .nm{flex:1}.srow .tn{width:64px}
+.srow button{padding:8px 10px}.rrow{display:flex;gap:8px;align-items:center;margin:6px 0}.rrow label{flex:1;font-size:14px}.rrow input{width:130px}
 .eyebox{border-top:1px solid var(--line);margin-top:4px;padding-top:6px}.eyett{font-size:14px;margin:6px 0 0;color:var(--acc)}
 body.linked .eyebox[data-eye=R]{display:none}body.linked .eyett{display:none}
 #status{grid-template-columns:1fr 1fr}
@@ -55,7 +58,7 @@ progress{width:100%;height:10px;accent-color:var(--acc)}
   <button onclick="pa(this,5)">Cross-eyed</button><button onclick="pa(this,6)">Eye roll</button><button onclick="pa(this,7)">Look around</button>
  </div>
  <div class="btns" style="margin-top:8px">
-  <button onclick="pa(this,101)">Groan</button><button onclick="pa(this,102)">Growl</button><button onclick="pa(this,107)">Roar</button><button onclick="pa(this,106)">Mmm…</button><button onclick="pa(this,110)">Chuckle</button><button onclick="pa(this,108)">Snore</button>
+  <span class="sndbtns" style="display:contents"></span>
   <button class="pri" onclick="pa(this,20)">Release</button>
  </div>
 </section>
@@ -78,7 +81,18 @@ progress{width:100%;height:10px;accent-color:var(--acc)}
 
 <section><h2>Sound</h2>
  <div class="row"><label>Volume</label><input type="range" min="0" max="30" data-k="volume"><output></output></div>
- <div class="btns"><button onclick="cmd(this,'sound:1')">Groan</button><button onclick="cmd(this,'sound:2')">Growl 1</button><button onclick="cmd(this,'sound:3')">Growl 2</button><button onclick="cmd(this,'sound:6')">Mmm…</button><button onclick="cmd(this,'sound:7')">Roar</button><button onclick="cmd(this,'sound:9')">Hmm?</button><button onclick="cmd(this,'sound:10')">Chuckle</button><button onclick="cmd(this,'sound:8')">Snore</button></div>
+ <div class="btns sndbtns"></div>
+ <div class="btns" style="margin-top:10px"><button onclick="toggleEd()" id="edbtn">Edit sounds</button></div>
+ <div id="sed" hidden>
+  <p class="note" id="sfiles"></p>
+  <h3 class="eyett">Buttons</h3>
+  <div id="srows"></div>
+  <div class="btns" style="margin:8px 0 14px"><button onclick="addRow()">+ Add button</button></div>
+  <h3 class="eyett">What he plays on his own</h3>
+  <p class="note">File numbers separated by commas; he picks one at random. Leave a box empty to keep him quiet for that moment.</p>
+  <div id="sroles"></div>
+  <div class="btns" style="margin-top:10px"><button class="pri" onclick="saveSounds(this)">Save sounds</button><button class="warn" onclick="resetSounds(this)">Back to the original sounds</button></div>
+ </div>
 </section>
 
 <section><h2>Behaviour</h2>
@@ -133,14 +147,26 @@ $('[data-k]').forEach(el=>{el.addEventListener('input',()=>{const o=el.parentEle
 // Every button lights green when the monster confirms it, red if it didn't get through.
 async function act(b,url,body,msg){if(b){b.classList.remove('ok','err');b.classList.add('busy')}
  try{const r=await fetch(url,{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:new URLSearchParams(body)});
-  if(!r.ok)throw 0;const j=await r.json();if(b){b.classList.remove('busy');b.classList.add('ok');setTimeout(()=>b.classList.remove('ok'),900)}
+  if(!r.ok){let m='Not received \u2013 check Wi-Fi';try{m=(await r.json()).error||m}catch(e){}throw m}const j=await r.json();if(b){b.classList.remove('busy');b.classList.add('ok');setTimeout(()=>b.classList.remove('ok'),900)}
   toast((msg||(b?b.textContent:'OK'))+' \u2713');return j}
- catch(e){if(b){b.classList.remove('busy');b.classList.add('err');setTimeout(()=>b.classList.remove('err'),1500)}toast('Not received \u2013 check Wi-Fi');}}
+ catch(e){if(b){b.classList.remove('busy');b.classList.add('err');setTimeout(()=>b.classList.remove('err'),1500)}toast(typeof e=='string'?e:'Not received \u2013 check Wi-Fi');}}
 function cmd(b,c){return act(b,'/api/cmd',{c})}
 async function setPw(){const p=document.getElementById('pw').value;if(p.length<8){toast('8+ characters');return}
  await post('/api/set',{wifiPass:p});toast('Password saved');document.getElementById('pw').value=''}
 async function resetAll(){if(!confirm('Reset all settings (except Wi-Fi password)?'))return;fill(await post('/api/reset',{}));toast('Reset')}
 const $1=id=>document.getElementById(id);
+// ---------- editable sounds ----------
+let SC=null;const ROLES=[['wake','Waking up'],['growl','Random growls'],['lean','Someone leans in'],['roar','Jump scare / transformation'],['snore','Snoring while asleep'],['hmm','Friendly "hmm?" (kid mode)'],['chuckle','Chuckle (loses staring contest)']];
+const esc=t=>String(t).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+function drawSoundButtons(){document.querySelectorAll('.sndbtns').forEach(d=>{d.innerHTML=SC.buttons.map(b=>'<button onclick="cmd(this,\'sound:'+b.t+'\')">'+esc(b.n)+'</button>').join('')})}
+function drawEditor(){$1('sfiles').textContent=SC.files?('The card has '+SC.files+' files: number '+'1 = 0001.mp3, 2 = 0002.mp3 and so on (folder "mp3").'):'File 1 = 0001.mp3, 2 = 0002.mp3 and so on, in the card\'s "mp3" folder.';
+ $1('srows').innerHTML=SC.buttons.map((b,i)=>'<div class="srow"><input class="nm" maxlength="19" value="'+esc(b.n)+'" oninput="SC.buttons['+i+'].n=this.value" placeholder="Button name"><input class="tn" type="number" min="1" max="2999" value="'+b.t+'" oninput="SC.buttons['+i+'].t=+this.value"><button onclick="cmd(this,\'sound:\'+SC.buttons['+i+'].t)">\u25B6</button><button class="warn" onclick="SC.buttons.splice('+i+',1);drawEditor()">\u2715</button></div>').join('');
+ $1('sroles').innerHTML=ROLES.map(([k,l])=>'<div class="rrow"><label>'+l+'</label><input inputmode="numeric" value="'+(SC.roles[k]||[]).join(', ')+'" oninput="SC.roles[\''+k+'\']=this.value.split(/[^0-9]+/).filter(x=>x).map(Number)"></div>').join('')}
+function addRow(){if(SC.buttons.length>=16){toast('Up to 16 buttons');return}const t=(SC.buttons.reduce((m,b)=>Math.max(m,b.t),0)||0)+1;SC.buttons.push({n:'New sound',t});drawEditor()}
+function toggleEd(){const e=$1('sed');e.hidden=!e.hidden;$1('edbtn').textContent=e.hidden?'Edit sounds':'Close editor';if(!e.hidden)drawEditor()}
+async function loadSounds(){try{SC=await (await fetch('/api/sounds')).json();drawSoundButtons()}catch(e){}}
+async function saveSounds(b){const j=await act(b,'/api/sounds',{cfg:JSON.stringify({buttons:SC.buttons,roles:SC.roles})},'Sounds saved');if(j){SC=j;drawSoundButtons();drawEditor()}}
+async function resetSounds(b){if(!confirm('Put the original buttons and sounds back?'))return;const j=await act(b,'/api/sounds/reset',{},'Original sounds restored');if(j){SC=j;drawSoundButtons();drawEditor()}}
 async function poll(){try{const s=await (await fetch('/api/status')).json();
  $1('st').textContent=s.state+(s.saving?' (power saver)':'');
  $1('rd').textContent=!s.radar?'not connected':s.person?(s.dist/1000).toFixed(2)+' m'+(s.people>1?' ('+s.people+' people)':''):'nobody';
@@ -173,5 +199,5 @@ function doUpdate(){const f=$1('fwf').files[0];if(!f){toast('Pick the file first
  x.onload=()=>{if(x.status==200){toast('Updated! Restarting…');setTimeout(()=>location.reload(),9000)}else{let m='Update failed';try{m=JSON.parse(x.responseText).error}catch(e){}alert(m);p.hidden=true}};
  x.onerror=()=>{alert('Connection lost during the update. Reconnect to his Wi-Fi and try again.');p.hidden=true};
  x.open('POST','/update');x.send(fd)}
-fetch('/api/settings').then(r=>r.json()).then(fill);poll();
+fetch('/api/settings').then(r=>r.json()).then(fill);loadSounds();poll();
 </script></body></html>)HTML";
