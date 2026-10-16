@@ -13,6 +13,8 @@ chamfered, the wire slot has a pointed roof). The only flat bit is a 0.5 mm spea
 The glue face is smoothed to match the bust wall.
 
 Pocket: 40.7 mm with three crush ribs, 7 mm deep, slot at the top for the solder tabs.
-Speaker sits 20 mm behind the wall, 14 mm above the grill centre (clears the base).
+v3: placed against the real printed bust (including the 45 deg shoulder slab inside, which v2 hit).
+Speaker sits 22 mm behind the wall, 15 mm above and 9 mm towards the centre from the grill centre.
+Fit it by lowering it in through the open base about 20 mm back from the wall, then pushing it straight onto the grill.
 
-Rebuild: `geo.py` (grill plane) -> `horn4.py` (voxel shell + placement search) -> `build.py`.
+Rebuild: `geo.py` (grill plane) -> `place.py` (placement search against the bust solid, collision + overhang) -> `build.py`.
