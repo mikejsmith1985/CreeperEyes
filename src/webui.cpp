@@ -5,6 +5,7 @@
 #include <DNSServer.h>
 #include <Update.h>
 #include <ESPmDNS.h>
+#include <Preferences.h>
 #include "settings.h"
 #include "puppet.h"
 #include "webui.h"
@@ -31,6 +32,19 @@ static String otaError;
 #define FW_EPOCH 0
 #endif
 extern "C" const char kFwTag[] __attribute__((used)) = "CEVER:" FW_VERSION ";";
+
+// When was this version installed? The phone sends its clock with the upload (the board has
+// no clock of its own); it's stored as "pending" and claimed by the new firmware on boot.
+static uint32_t fwInstalledAt = 0;      // UTC seconds, 0 = unknown (flashed over USB)
+static void fwInstallInfoLoad() {
+  Preferences p; p.begin("creeperfw", false);
+  uint32_t pend = p.getUInt("pend", 0);
+  String ver = p.getString("ver", "");
+  if (pend) { fwInstalledAt = pend; p.putUInt("inst", pend); p.remove("pend"); p.putString("ver", FW_VERSION); }
+  else if (ver != FW_VERSION) { fwInstalledAt = 0; p.putUInt("inst", 0); p.putString("ver", FW_VERSION); }
+  else fwInstalledAt = p.getUInt("inst", 0);
+  p.end();
+}
 
 extern const char INDEX_HTML[] PROGMEM;
 extern const uint8_t ICON_PNG[] PROGMEM;
@@ -61,11 +75,11 @@ static void sendSettings() {
   snprintf(b, sizeof(b),
     "\"kidMode\":%s,\"randomEyes\":%s,\"transforms\":%s,\"jumpScares\":%s,\"antics\":%s,"
     "\"sleepSounds\":%s,\"powerSaver\":%s,\"rangeMm\":%u,\"followGain\":%u,"
-    "\"fw\":\"%s\",\"fwGit\":\"%s\",\"fwEpoch\":%lu,",
+    "\"fw\":\"%s\",\"fwGit\":\"%s\",\"fwEpoch\":%lu,\"fwInstalled\":%lu,",
     gSet.kidMode ? "true" : "false", gSet.randomEyes ? "true" : "false", gSet.transforms ? "true" : "false",
     gSet.jumpScares ? "true" : "false", gSet.antics ? "true" : "false", gSet.sleepSounds ? "true" : "false",
     gSet.powerSaver ? "true" : "false", gSet.rangeMm, gSet.followGain,
-    FW_VERSION, FW_GIT, (unsigned long)FW_EPOCH);
+    FW_VERSION, FW_GIT, (unsigned long)FW_EPOCH, (unsigned long)fwInstalledAt);
   j += b;
   j += "\"styles\":[";
   for (int i = 0; i < kEyeStyleCount; i++) { if (i) j += ","; j += "\""; j += kEyeStyles[i].name; j += "\""; }
@@ -178,6 +192,8 @@ static void handleUpdateDone() {
     server.send(500, "application/json", "{\"ok\":false,\"error\":\"" + otaError + "\"}");
     return;
   }
+  uint32_t t = server.arg("t").toInt();
+  if (t > 1700000000UL) { Preferences p; p.begin("creeperfw", false); p.putUInt("pend", t); p.end(); }
   server.send(200, "application/json", "{\"ok\":true}");
   delay(800);
   ESP.restart();
@@ -199,7 +215,8 @@ static void webTask(void *) {
 }
 
 void webuiStart() {
-  Serial.printf("[fw] %s (git %s)\n", kFwTag, FW_GIT);
+  fwInstallInfoLoad();
+  Serial.printf("[fw] %s (git %s) installed at %lu\n", kFwTag, FW_GIT, (unsigned long)fwInstalledAt);
   // Bring the radio up in AP mode first and configure it before anything else,
   // otherwise the driver briefly advertises its default open "ESP_xxxxxx" network.
   WiFi.persistent(false);

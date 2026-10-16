@@ -194,8 +194,10 @@ function pa(b,a){$1('pup').classList.add('on');return act(b,'/api/puppet',{a})}
   pend={x:Math.round(fx*1023),y:Math.round((1-fy)*1023)};sendXY();$1('pup').classList.add('on')}
  pad.addEventListener('pointerdown',e=>{pad.setPointerCapture(e.pointerId);mv(e)});
  pad.addEventListener('pointermove',e=>{if(e.buttons||e.pointerType=='touch')mv(e)});})();
-function fwText(s){if(!s.fwEpoch)return 'Built '+s.fw;const d=new Date(s.fwEpoch*1000);
- return 'v'+s.fw+' · built '+d.toLocaleDateString([], {month:'short',day:'numeric'})+' '+d.toLocaleTimeString([], {hour:'numeric',minute:'2-digit'})}
+function fwText(s){if(!s.fwEpoch)return 'Built '+s.fw;
+ const day=d=>{const t=new Date(),y=new Date(Date.now()-864e5);return d.toDateString()==t.toDateString()?'today':d.toDateString()==y.toDateString()?'yesterday':d.toLocaleDateString([], {month:'short',day:'numeric'})};
+ const when=e=>{const d=new Date(e*1000);return day(d)+' '+d.toLocaleTimeString([], {hour:'numeric',minute:'2-digit'})};
+ return 'v'+s.fw+(s.fwInstalled?' · installed '+when(s.fwInstalled):'')+' · built '+when(s.fwEpoch)}
 let fileVer=null;
 function pickFw(){const f=$1('fwf').files[0];fileVer=null;if(!f)return;const r=new FileReader();
  r.onload=()=>{const b=new Uint8Array(r.result),tag=[67,69,86,69,82,58];let v=null;
@@ -223,6 +225,6 @@ function doUpdate(){const f=$1('fwf').files[0];if(!f){toast('Pick the file first
    setTimeout(check,2000)};
   setTimeout(check,4000)};
  x.onerror=()=>{m.style.color='#e07a5f';m.textContent='Connection lost during the upload. Reconnect to his Wi-Fi and try again.';p.hidden=true};
- x.open('POST','/update');x.send(fd)}
+ x.open('POST','/update?t='+Math.floor(Date.now()/1000));x.send(fd)}
 fetch('/api/settings').then(r=>r.json()).then(fill);loadSounds();poll();
 </script></body></html>)HTML";
