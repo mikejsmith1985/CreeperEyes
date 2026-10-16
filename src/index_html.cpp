@@ -103,6 +103,7 @@ progress{width:100%;height:10px;accent-color:var(--acc)}
  <div class="row"><label>Antics<small>Winks, eye rolls, cross-eyes, nodding off</small></label><input type="checkbox" class="sw" data-k="antics"></div>
  <div class="row"><label>Snores while asleep</label><input type="checkbox" class="sw" data-k="sleepSounds"></div>
  <div class="row"><label>Power saver<small>Dims the eyes after 20 s asleep</small></label><input type="checkbox" class="sw" data-k="powerSaver"></div>
+ <div class="row"><label>Follow strength<small>How hard his eyes swing towards people. 1 = realistic, 5 = cartoon</small></label><input type="range" min="1" max="5" step="1" data-k="followGain" data-u="x"><output></output></div>
  <div class="row"><label>Detection range<small>Ignores anyone further away (2 m suits the back of a car)</small></label><input type="range" min="500" max="5000" step="100" data-k="rangeMm" data-u="m"><output></output></div>
  <div class="row"><label>Wakes up within</label><input type="range" min="300" max="3000" step="100" data-k="wakeDistMm" data-u="m"><output></output></div>
  <div class="row"><label>"Leaning in" within</label><input type="range" min="150" max="1200" step="50" data-k="leanDistMm" data-u="m"><output></output></div>
@@ -118,8 +119,9 @@ progress{width:100%;height:10px;accent-color:var(--acc)}
 
 <section><h2>Firmware update</h2>
  <div class="row"><label>Installed<small id="fw">…</small></label></div>
- <div class="row"><label>Update file<small>creepereyes-update.bin, downloaded to this phone beforehand</small></label><input type="file" id="fwf" accept=".bin" style="max-width:150px"></div>
+ <div class="row"><label>Update file<small id="fwfile">creepereyes-v….bin, downloaded to this phone beforehand</small></label><input type="file" id="fwf" accept=".bin" style="max-width:150px" onchange="pickFw()"></div>
  <progress id="fwp" value="0" max="100" hidden></progress>
+ <div id="fwmsg" style="margin-top:8px;font-weight:600"></div>
  <div class="btns" style="margin-top:8px"><button class="pri" onclick="doUpdate()">Install update</button></div>
 </section>
 </main>
@@ -127,14 +129,14 @@ progress{width:100%;height:10px;accent-color:var(--acc)}
 <script>
 const $=s=>document.querySelectorAll(s);let t,S={};
 function toast(m){const e=document.getElementById('toast');e.textContent=m||'Saved';e.classList.add('on');clearTimeout(t);t=setTimeout(()=>e.classList.remove('on'),1400)}
-function fmt(el){const u=el.dataset.u,v=+el.value;return u=='m'?(v/1000).toFixed(v<1000?2:1)+' m':u=='s'?v+' s':v}
+function fmt(el){const u=el.dataset.u,v=+el.value;return u=='m'?(v/1000).toFixed(v<1000?2:1)+' m':u=='s'?v+' s':u=='x'?'×'+v:v}
 function key(el){const b=el.closest('.eyebox');return el.dataset.k+(b?b.dataset.eye:'')}
 function fill(s){S=s;
  if(s.styles)$('select.styles').forEach(sel=>{if(sel.options.length!=s.styles.length)sel.innerHTML=s.styles.map((n,i)=>'<option value="'+i+'">'+n+'</option>').join('')});
  $('[data-k]').forEach(el=>{const v=s[key(el)];if(v===undefined)return;
   if(el.type=='checkbox')el.checked=!!v;else el.value=v;const o=el.parentElement.querySelector('output');if(o)o.textContent=fmt(el)});
  document.body.classList.toggle('linked',!!s.linkEyes);
- if(s.fw)document.getElementById('fw').textContent='Built '+s.fw;
+ if(s.fw)document.getElementById('fw').textContent=fwText(s);
  if(s.ssid)document.getElementById('net').textContent='Connected to '+s.ssid+' · changes apply instantly and save automatically.'}
 async function post(u,b){const r=await fetch(u,{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:new URLSearchParams(b)});return r.json()}
 const timers={};
@@ -192,12 +194,35 @@ function pa(b,a){$1('pup').classList.add('on');return act(b,'/api/puppet',{a})}
   pend={x:Math.round(fx*1023),y:Math.round((1-fy)*1023)};sendXY();$1('pup').classList.add('on')}
  pad.addEventListener('pointerdown',e=>{pad.setPointerCapture(e.pointerId);mv(e)});
  pad.addEventListener('pointermove',e=>{if(e.buttons||e.pointerType=='touch')mv(e)});})();
+function fwText(s){if(!s.fwEpoch)return 'Built '+s.fw;const d=new Date(s.fwEpoch*1000);
+ return 'v'+s.fw+' · built '+d.toLocaleDateString([], {month:'short',day:'numeric'})+' '+d.toLocaleTimeString([], {hour:'numeric',minute:'2-digit'})}
+let fileVer=null;
+function pickFw(){const f=$1('fwf').files[0];fileVer=null;if(!f)return;const r=new FileReader();
+ r.onload=()=>{const b=new Uint8Array(r.result),tag=[67,69,86,69,82,58];let v=null;
+  for(let i=0;i<b.length-6&&!v;i++){let k=0;while(k<6&&b[i+k]==tag[k])k++;if(k==6){let j=i+6,t='';while(j<b.length&&b[j]!=59&&t.length<20)t+=String.fromCharCode(b[j++]);v=t}}
+  fileVer=v;const m=$1('fwmsg');
+  if(b[0]!=0xE9){m.style.color='#e07a5f';m.textContent='That file is not CreeperEyes firmware.'}
+  else if(!v){m.style.color='#e0b15f';m.textContent='This file has no version stamp (older build).'}
+  else if(v==S.fw){m.style.color='#e0b15f';m.textContent='This file is v'+v+' – the same version he already has.'}
+  else{m.style.color='#8fd16a';m.textContent='This file is v'+v+'. He has '+(/^[0-9]/.test(S.fw||'')?'v'+S.fw:'an older unversioned build')+'. Tap Install update.'}};
+ r.readAsArrayBuffer(f)}
 function doUpdate(){const f=$1('fwf').files[0];if(!f){toast('Pick the file first');return}
- if(!confirm('Install '+f.name+'? The eyes pause for about a minute, then he restarts.'))return;
+ const from=S.fw,m=$1('fwmsg'),fromTxt=/^[0-9]/.test(from||'')?'v'+from:'the old build';
+ if(!confirm('Install '+(fileVer?'v'+fileVer:f.name)+'? The eyes pause for about a minute, then he restarts.'))return;
  const fd=new FormData();fd.append('firmware',f,f.name);const x=new XMLHttpRequest(),p=$1('fwp');p.hidden=false;
+ m.style.color='';m.textContent='Uploading…';
  x.upload.onprogress=e=>{if(e.lengthComputable)p.value=e.loaded*100/e.total};
- x.onload=()=>{if(x.status==200){toast('Updated! Restarting…');setTimeout(()=>location.reload(),9000)}else{let m='Update failed';try{m=JSON.parse(x.responseText).error}catch(e){}alert(m);p.hidden=true}};
- x.onerror=()=>{alert('Connection lost during the update. Reconnect to his Wi-Fi and try again.');p.hidden=true};
+ x.onload=()=>{if(x.status!=200){let e='Update failed';try{e=JSON.parse(x.responseText).error}catch(_){}m.style.color='#e07a5f';m.textContent=e;p.hidden=true;return}
+  m.textContent='Written. Waiting for him to restart…';const t0=Date.now();
+  const check=async()=>{try{const s=await (await fetch('/api/settings',{cache:'no-store'})).json();
+    if(s.fw&&s.fw!==from||(fileVer&&s.fw===fileVer)){fill(s);p.hidden=true;
+     if(!fileVer||s.fw===fileVer){m.style.color='#8fd16a';m.textContent='✓ Updated: '+fromTxt+' → v'+s.fw}
+     else{m.style.color='#e0b15f';m.textContent='He restarted on v'+s.fw+' (the file said v'+fileVer+').'}
+     return}}catch(_){}
+   if(Date.now()-t0>90000){p.hidden=true;m.style.color='#e07a5f';m.textContent='✗ He is still on '+fromTxt+' after 90 s. Reconnect to his Wi-Fi, reload this page and check the version.';return}
+   setTimeout(check,2000)};
+  setTimeout(check,4000)};
+ x.onerror=()=>{m.style.color='#e07a5f';m.textContent='Connection lost during the upload. Reconnect to his Wi-Fi and try again.';p.hidden=true};
  x.open('POST','/update');x.send(fd)}
 fetch('/api/settings').then(r=>r.json()).then(fill);loadSounds();poll();
 </script></body></html>)HTML";

@@ -19,6 +19,19 @@ static volatile uint32_t saveAtMs = 0;   // debounce flash writes
 volatile bool gOtaActive = false;
 static String otaError;
 
+// Version stamp (set by tools/pio_version.py). The "CEVER:" tag is also searched for by the
+// update page inside the .bin you pick, so it can tell you which version you're installing.
+#ifndef FW_VERSION
+#define FW_VERSION "dev"
+#endif
+#ifndef FW_GIT
+#define FW_GIT "local"
+#endif
+#ifndef FW_EPOCH
+#define FW_EPOCH 0
+#endif
+extern "C" const char kFwTag[] __attribute__((used)) = "CEVER:" FW_VERSION ";";
+
 extern const char INDEX_HTML[] PROGMEM;
 extern const uint8_t ICON_PNG[] PROGMEM;
 extern const size_t ICON_PNG_LEN;
@@ -37,7 +50,7 @@ static void sendSettings() {
     j += "\"irisColor" + String(side[e]) + "\":\"" + hex6(L.irisColor) + "\",";
     j += "\"eyelidColor" + String(side[e]) + "\":\"" + hex6(L.eyelidColor) + "\",";
   }
-  char b[300];
+  char b[420];
   snprintf(b, sizeof(b),
     "\"linkEyes\":%s,\"brightness\":%u,\"autoBlink\":%s,\"volume\":%u,\"wakeDistMm\":%u,\"leanDistMm\":%u,"
     "\"sleepAfterS\":%u,\"flipGazeX\":%s,\"flipGazeY\":%s,\"ssid\":\"%s\",",
@@ -47,10 +60,12 @@ static void sendSettings() {
   j += b;
   snprintf(b, sizeof(b),
     "\"kidMode\":%s,\"randomEyes\":%s,\"transforms\":%s,\"jumpScares\":%s,\"antics\":%s,"
-    "\"sleepSounds\":%s,\"powerSaver\":%s,\"rangeMm\":%u,\"fw\":\"%s %s\",",
+    "\"sleepSounds\":%s,\"powerSaver\":%s,\"rangeMm\":%u,\"followGain\":%u,"
+    "\"fw\":\"%s\",\"fwGit\":\"%s\",\"fwEpoch\":%lu,",
     gSet.kidMode ? "true" : "false", gSet.randomEyes ? "true" : "false", gSet.transforms ? "true" : "false",
     gSet.jumpScares ? "true" : "false", gSet.antics ? "true" : "false", gSet.sleepSounds ? "true" : "false",
-    gSet.powerSaver ? "true" : "false", gSet.rangeMm, __DATE__, __TIME__);
+    gSet.powerSaver ? "true" : "false", gSet.rangeMm, gSet.followGain,
+    FW_VERSION, FW_GIT, (unsigned long)FW_EPOCH);
   j += b;
   j += "\"styles\":[";
   for (int i = 0; i < kEyeStyleCount; i++) { if (i) j += ","; j += "\""; j += kEyeStyles[i].name; j += "\""; }
@@ -77,6 +92,7 @@ static bool setOne(const String &k, const String &v) {
     else if (k == "volume")      { gSet.volume    = constrain(n, 0, 30); volChanged = true; }
     else if (k == "wakeDistMm")  gSet.wakeDistMm  = constrain(n, 300, 6000);
     else if (k == "rangeMm")     gSet.rangeMm     = constrain(n, 500, 6000);
+    else if (k == "followGain")  gSet.followGain  = constrain(n, 1, 5);
     else if (k == "leanDistMm")  gSet.leanDistMm  = constrain(n, 150, 1500);
     else if (k == "sleepAfterS") gSet.sleepAfterS = constrain(n, 2, 120);
     else if (k == "flipGazeX")   gSet.flipGazeX   = on;
@@ -183,6 +199,7 @@ static void webTask(void *) {
 }
 
 void webuiStart() {
+  Serial.printf("[fw] %s (git %s)\n", kFwTag, FW_GIT);
   // Bring the radio up in AP mode first and configure it before anything else,
   // otherwise the driver briefly advertises its default open "ESP_xxxxxx" network.
   WiFi.persistent(false);

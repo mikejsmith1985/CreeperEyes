@@ -7,7 +7,7 @@ volatile bool gSettingsDirty = true;   // apply once at boot
 
 static Preferences prefs;
 static const char *NS = "creeper";
-static const uint16_t kVersion = 4;    // bump if the struct layout changes
+static const uint16_t kVersion = 5;    // bump if the struct layout changes
 
 // Layout of version 1 (single look for both eyes), so old saves carry over.
 struct SettingsV1 {
@@ -31,6 +31,7 @@ void settingsReset() {
   gSet.sleepSounds = true;
   gSet.powerSaver  = true;
   gSet.rangeMm     = 2000;
+  gSet.followGain  = 4;
   gSet.brightness  = 15;
   gSet.autoBlink   = true;
   gSet.volume      = 25;
@@ -48,6 +49,10 @@ void settingsLoad() {
   uint16_t ver = prefs.getUShort("ver", 0);
   if (ver == kVersion && prefs.getBytesLength("set") == sizeof(Settings)) {
     prefs.getBytes("set", &gSet, sizeof(Settings));
+  } else if (ver == 4 && prefs.getBytesLength("set") >= offsetof(Settings, followGain)) {
+    size_t n = prefs.getBytesLength("set");            // v4 struct = everything before followGain
+    uint8_t *b = (uint8_t *)malloc(n);
+    if (b) { prefs.getBytes("set", b, n); memcpy(&gSet, b, offsetof(Settings, followGain)); free(b); }
   } else if (ver == 3 && prefs.getBytesLength("set") == offsetof(Settings, rangeMm)) {
     prefs.getBytes("set", &gSet, offsetof(Settings, rangeMm));    // keeps the default 2 m range
     if (gSet.wakeDistMm > 1800) gSet.wakeDistMm = 1500;               // old 2.5 m default is too far for a car
@@ -62,6 +67,7 @@ void settingsLoad() {
     memcpy(gSet.wifiPass, o.wifiPass, sizeof(gSet.wifiPass));
   }
   prefs.end();
+  if (gSet.followGain < 1 || gSet.followGain > 5) gSet.followGain = 4;
   gSet.wifiPass[sizeof(gSet.wifiPass) - 1] = 0;
   if (strlen(gSet.wifiPass) < 8) strlcpy(gSet.wifiPass, "frankenstein", sizeof(gSet.wifiPass));
   gSettingsDirty = true;

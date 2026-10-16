@@ -19,6 +19,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - uses: actions/setup-python@v5
         with:
@@ -46,6 +48,7 @@ jobs:
             0x250000 eyedata/eyes.bin
           # app-only image for the wireless update page on the monster's own Wi-Fi
           cp $B/firmware.bin site/creepereyes-update.bin
+          cp $B/creepereyes-v*.bin site/ 2>/dev/null || true
           APP=$(stat -c%s $B/firmware.bin); echo "app size $APP of 1179648"; test $APP -le 1179648
           cat > site/manifest.json <<JSON
           {

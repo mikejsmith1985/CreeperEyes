@@ -305,11 +305,13 @@ static float approach(float cur, float target, float rate, float dtS) {
 
 static void gazeAt(const Target &t, float dist) {
   float ang = atan2f((float)t.x, (float)t.y);                  // radians, 0 = straight ahead
-  float gx = 512 + (gSet.flipGazeX ? -1 : 1) * (ang / 0.44f) * 470;   // +-25 deg -> full swing (people at 1-2 m rarely go wider)
+  // Follow strength 1 = full swing at 45 deg off-centre (realistic), 5 = full swing at 9 deg.
+  float fullSwing = 0.785f / constrain((int)gSet.followGain, 1, 5);
+  float gx = 512 + (gSet.flipGazeX ? -1 : 1) * (ang / fullSwing) * 480;
   float down = constrain((2000.0f - dist) / 1600.0f, 0.0f, 1.0f);  // closer kids -> look down
-  float gy = 512 - (gSet.flipGazeY ? -1 : 1) * down * 300;
-  gazeTX = constrain(gx, 40.0f, 983.0f);
-  gazeTY = constrain(gy, 80.0f, 943.0f);
+  float gy = 512 - (gSet.flipGazeY ? -1 : 1) * down * fminf(480.0f, 150.0f * gSet.followGain);
+  gazeTX = constrain(gx, 32.0f, 992.0f);
+  gazeTY = constrain(gy, 32.0f, 992.0f);
 }
 
 static void handlePhoneAction(uint8_t a, uint32_t now) {
@@ -471,7 +473,7 @@ void puppetUpdate(uint32_t nowMicros) {
         } else {
           focusSlot = -1;
           gazeAt(t, dist);
-          gazeRate = staring ? 10 : 9;
+          gazeRate = staring ? 10 : 12;
         }
 
         // Staring contest: someone standing still close by

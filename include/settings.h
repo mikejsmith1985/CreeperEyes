@@ -40,6 +40,9 @@ struct Settings {
 
   // ---- added in v4 ----
   uint16_t rangeMm;       // radar ignores anyone further away than this (back-of-car: 2 m)
+
+  // ---- added in v5 ----
+  uint8_t  followGain;    // 1..5: how exaggerated the eyes follow people (1 = realistic)
 };
 
 extern Settings gSet;

@@ -53,6 +53,8 @@ typedef Adafruit_SSD1351 displayType; // Using OLED display(s)
 
 //#define TRACKING        // If enabled, eyelid tracks pupil (off: lids stay open except when blinking)
 #define IRIS_SMOOTH       // If enabled, filter input from IRIS_PIN
+#define TRACK_TRAVEL_X 56  // px the iris may move left/right of centre while following someone
+#define TRACK_TRAVEL_Y 40  // px up/down
 #define IRIS_MIN      150 // Shared pupil animation range; each eye style maps it onto its own range
 #define IRIS_MAX      400
 #define AUTOBLINK        // If enabled, eyes blink autonomously
@@ -135,8 +137,8 @@ void setup(void) {
 void drawEye( // Renders one eye.  Inputs must be pre-clipped & valid.
   uint8_t  e,       // Eye array index; 0 or 1 for left/right
   uint16_t iScale,  // Iris scale 0-1023 (bigger = bigger pupil), already in this style's range
-  uint8_t  scleraX, // First pixel X offset into sclera image
-  uint8_t  scleraY, // First pixel Y offset into sclera image
+  int16_t  scleraX, // First pixel X offset into sclera image (may run past the edges:
+  int16_t  scleraY, // the sclera's edge pixels are repeated, so the iris can travel further)
   uint8_t  uT,      // Upper eyelid threshold value
   uint8_t  lT) {    // Lower eyelid threshold value
 
@@ -153,7 +155,8 @@ void drawEye( // Renders one eye.  Inputs must be pre-clipped & valid.
     return;
   }
   const EyeStyle  &s = *r.s;
-  uint8_t  screenX, screenY, scleraXsave;
+  uint8_t  screenX, screenY;
+  int16_t  scleraXsave;
   int16_t  irisX, irisY;
   uint16_t p, a, burstIdx;
   uint32_t d;
@@ -170,14 +173,15 @@ void drawEye( // Renders one eye.  Inputs must be pre-clipped & valid.
     irisX   = scleraXsave - (s.scleraW - s.irisW) / 2;
     const uint8_t  *upRow = s.upper  + screenY * SCREEN_WIDTH;
     const uint8_t  *loRow = s.lower  + screenY * SCREEN_WIDTH;
-    const uint16_t *scRow = s.sclera + scleraY * s.scleraW;
+    const uint16_t *scRow = s.sclera + constrain(scleraY, 0, (int)s.scleraH - 1) * s.scleraW;
+    const int16_t   scMaxX = s.scleraW - 1;
     for(screenX=0; screenX<SCREEN_WIDTH; screenX++, scleraX++, irisX++) {
       int effectiveX = e == 1 ? screenX : SCREEN_WIDTH - 1 - screenX;
       if((loRow[effectiveX] <= lT) || (upRow[effectiveX] <= uT)) {   // Covered by eyelid
         p = r.eyelid;
       } else if((irisY < 0) || (irisY >= s.irisH) ||
                 (irisX < 0) || (irisX >= s.irisW)) {              // In sclera
-        p = scRow[scleraX];
+        p = scRow[scleraX < 0 ? 0 : scleraX > scMaxX ? scMaxX : scleraX];
       } else {                                                    // Maybe iris...
         p = s.polar[irisY * s.irisW + irisX];                     // Polar angle/dist
         d = p & 0x7F;                                             // Distance (0-127)
@@ -188,7 +192,7 @@ void drawEye( // Renders one eye.  Inputs must be pre-clipped & valid.
           p = s.iris[d * s.irisMapW + a];
           if(r.recolor) p = r.irisLut[(((p >> 11) * 154) + (((p >> 5) & 63) * 150) + ((p & 31) * 58)) >> 8];
         } else {
-          p = scRow[scleraX];                                     // Pupil / sclera
+          p = scRow[scleraX < 0 ? 0 : scleraX > scMaxX ? scMaxX : scleraX];                                     // Pupil / sclera
         }
       }
       pBurst[burstIdx++] = p;
@@ -342,9 +346,11 @@ void frame( // Process motion for a single frame of left or right eye
       eyeInMotion      = true;            // Start move on next frame
     }
   }
+  bool tracked = false;
   { // Radar gaze override: when someone is tracked the eyes follow them.
     int16_t gx, gy;
     if(puppetGaze(eyeIndex, &gx, &gy)) {
+      tracked = true;
       eyeX = eyeOldX = eyeNewX = gx;            // keep autonomous state in sync so it
       eyeY = eyeOldY = eyeNewY = gy;            // resumes smoothly when override ends
       eyeInMotion = false; eyeMoveStartTime = t; eyeMoveDuration = 1500000;
@@ -395,8 +401,15 @@ void frame( // Process motion for a single frame of left or right eye
   iScale = constrain(iv, 0, 1023);
 
   // Scale eye X/Y positions (0-1023) to pixel units used by drawEye()
-  eyeX = map(eyeX, 0, 1023, 0, st.scleraW - 128);
-  eyeY = map(eyeY, 0, 1023, 0, st.scleraH - 128);
+  if(tracked) {
+    // Following someone: exaggerated travel, the iris can go almost to the screen edge
+    // (further than the sclera image allows -- drawEye() repeats the sclera's edge pixels).
+    eyeX = (st.scleraW - 128) / 2 + ((int32_t)eyeX - 512) * TRACK_TRAVEL_X / 512;
+    eyeY = (st.scleraH - 128) / 2 + ((int32_t)eyeY - 512) * TRACK_TRAVEL_Y / 512;
+  } else {
+    eyeX = map(eyeX, 0, 1023, 0, st.scleraW - 128);
+    eyeY = map(eyeY, 0, 1023, 0, st.scleraH - 128);
+  }
   if (eyeIndex == 1) { // this inverts the motion of the eyes
     // eyeX = (SCLERA_WIDTH - 128) - eyeX; // Mirrored display
   }
@@ -406,7 +419,7 @@ void frame( // Process motion for a single frame of left or right eye
   // here was extracted from my posterior and not mathematically based.
   // I suppose one could get all clever with a range sensor, but for now...
   eyeX += 4;
-  if(eyeX > (st.scleraW - 128)) eyeX = (st.scleraW - 128);
+  if(!tracked && eyeX > (st.scleraW - 128)) eyeX = (st.scleraW - 128);
 
   // Eyelids are rendered using a brightness threshold image.  This same
   // map can be used to simplify another problem: making the upper eyelid
