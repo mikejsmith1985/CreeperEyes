@@ -222,9 +222,9 @@ static float    gazeX = 512, gazeY = 512, gazeTX = 512, gazeTY = 512, gazeRate =
 static int16_t  irisOverride = -1;
 static uint32_t irisUntilMs = 0;
 static uint32_t lastUpdateMs = 0;
-static volatile int pendingCmd = 0;
+static volatile int pendingCmd = 0;     // 1 wake, 2 sleep, 1000+N play sound N
 static volatile bool pendingPreview = false;   // a look setting changed: open the eyes so it shows
-static uint32_t previewUntilMs = 0;     // 1 wake, 2 sleep, 1000+N play sound N
+static uint32_t previewUntilMs = 0;
 static volatile bool pendingVolume = false;
 static Target   lastTarget = {false, 0, 0};
 static float    lastDist = 0;
