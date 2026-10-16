@@ -1,5 +1,6 @@
 // puppet.cpp -- see include/puppet.h for what this does and how it is wired.
 #include "puppet.h"
+void webuiSerialSet(const char *kv);   // webui.cpp
 #include "settings.h"
 #include "eyestyle.h"
 #include "soundcfg.h"
@@ -339,12 +340,14 @@ void puppetUpdate(uint32_t nowMicros) {
   if (pendingVolume) { pendingVolume = false; dfSend(0x06, effectiveVolume()); }
   if (cmd >= 1000) playTrack(cmd - 1000, 1000, true);
 
-  // Serial test hook: "a<N>" fires phone action N (same as the phone buttons)
-  static char sbuf[8]; static uint8_t sn = 0;
+  // Serial test hooks: "a<N>" fires phone action N, "s<key>=<value>" changes a setting
+  static char sbuf[48]; static uint8_t sn = 0;
   while (Serial.available()) {
     char c = Serial.read();
-    if (c == '\n' || c == '\r') { sbuf[sn] = 0; if (sn > 1 && sbuf[0] == 'a') puppetPhone(-1, -1, atoi(sbuf + 1)); sn = 0; }
-    else if (sn < 7) sbuf[sn++] = c;
+    if (c == '\n' || c == '\r') { sbuf[sn] = 0; if (sn > 1 && sbuf[0] == 'a') puppetPhone(-1, -1, atoi(sbuf + 1));
+      else if (sn > 2 && sbuf[0] == 's') webuiSerialSet(sbuf + 1);
+      sn = 0; }
+    else if (sn < sizeof(sbuf) - 1) sbuf[sn++] = c;
   }
   // Phone actions queued by the web task
   while (actTail != actHead) { uint8_t a = actQ[actTail]; actTail = (actTail + 1) & 7; handlePhoneAction(a, now); }

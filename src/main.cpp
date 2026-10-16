@@ -257,6 +257,11 @@ void applySettings() {
     }
   }
   // brightness is applied in frame() (it also handles the power saver)
+  static const EyeStyle *was[2] = {nullptr, nullptr};
+  if(er[0].s != was[0] || er[1].s != was[1]) {
+    was[0] = er[0].s; was[1] = er[1].s;
+    Serial.printf("[look] left=%s right=%s\n", er[0].s ? er[0].s->name : "-", er[1].s ? er[1].s->name : "-");
+  }
 }
 
 void frame( // Process motion for a single frame of left or right eye

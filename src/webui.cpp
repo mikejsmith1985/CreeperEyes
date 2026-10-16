@@ -59,10 +59,9 @@ static void sendSettings() {
 }
 
 // POST /api/set  key=value (form encoded, any subset of keys)
-static void handleSet() {
-  bool volChanged = false;
-  for (int i = 0; i < server.args(); i++) {
-    const String k = server.argName(i), v = server.arg(i);
+// Applies one setting by name. Returns true if the volume needs pushing to the DFPlayer.
+static bool setOne(const String &k, const String &v) {
+    bool volChanged = false;
     long n = v.toInt();
     bool on = (v == "1" || v == "true" || v == "on");
     // per-eye keys end in L or R, e.g. styleL / irisColorR
@@ -91,11 +90,26 @@ static void handleSet() {
     else if (k == "powerSaver")  gSet.powerSaver  = on;
     else if (k == "wifiPass" && v.length() >= 8 && v.length() < sizeof(gSet.wifiPass))
       strlcpy(gSet.wifiPass, v.c_str(), sizeof(gSet.wifiPass));
-  }
+    else return volChanged;
+    Serial.printf("[set] %s=%s\n", k.c_str(), k == "wifiPass" ? "***" : v.c_str());
+    return volChanged;
+}
+
+static void handleSet() {
+  bool volChanged = false;
+  for (int i = 0; i < server.args(); i++) volChanged |= setOne(server.argName(i), server.arg(i));
   if (volChanged) puppetApplyVolume();
   gSettingsDirty = true;
   saveAtMs = millis() + 2000;
   sendSettings();
+}
+
+// Serial test hook: "sstyleL=3" sets a value exactly like the phone page does.
+void webuiSerialSet(const char *kv) {
+  String s(kv); int eq = s.indexOf('=');
+  if (eq < 1) return;
+  if (setOne(s.substring(0, eq), s.substring(eq + 1))) puppetApplyVolume();
+  gSettingsDirty = true; saveAtMs = millis() + 2000;
 }
 
 static void handleCmd() { puppetCommand(server.arg("c")); server.send(200, "application/json", "{\"ok\":true}"); }

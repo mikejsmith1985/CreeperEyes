@@ -143,7 +143,7 @@ function send(el){const k=key(el),v=val(el),b={[k]:v};
  if(el.closest('.eyebox')&&S.linkEyes){b[el.dataset.k+'L']=v;b[el.dataset.k+'R']=v}
  if(k=='linkEyes'&&v==1)['style','irisMode','irisColor','eyelidColor'].forEach(n=>b[n+'R']=S[n+'L']);
  clearTimeout(timers[k]);timers[k]=setTimeout(async()=>{fill(await post('/api/set',b));toast()},150)}
-$('[data-k]').forEach(el=>{el.addEventListener('input',()=>{const o=el.parentElement.querySelector('output');if(o)o.textContent=fmt(el);send(el)})});
+$('[data-k]').forEach(el=>{const h=()=>{const o=el.parentElement.querySelector('output');if(o)o.textContent=fmt(el);send(el)};el.addEventListener('input',h);if(el.tagName=='SELECT'||el.type=='checkbox'||el.type=='color')el.addEventListener('change',h)});
 // Every button lights green when the monster confirms it, red if it didn't get through.
 async function act(b,url,body,msg){if(b){b.classList.remove('ok','err');b.classList.add('busy')}
  try{const r=await fetch(url,{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:new URLSearchParams(body)});
