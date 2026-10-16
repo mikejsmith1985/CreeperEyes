@@ -91,7 +91,7 @@ static bool setOne(const String &k, const String &v) {
     else if (k == "wifiPass" && v.length() >= 8 && v.length() < sizeof(gSet.wifiPass))
       strlcpy(gSet.wifiPass, v.c_str(), sizeof(gSet.wifiPass));
     else return volChanged;
-    if (e >= 0 || k == "linkEyes") puppetPreviewLook();
+    if (e >= 0 || k == "linkEyes" || k == "randomEyes" || k == "transforms") puppetPreviewLook();
     Serial.printf("[set] %s=%s\n", k.c_str(), k == "wifiPass" ? "***" : v.c_str());
     return volChanged;
 }

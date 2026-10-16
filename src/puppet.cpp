@@ -339,7 +339,10 @@ void puppetUpdate(uint32_t nowMicros) {
   pollDf();
 
   int cmd = pendingCmd; pendingCmd = 0;
-  if (pendingPreview) { pendingPreview = false; previewUntilMs = now + 6000; }
+  if (pendingPreview) {              // the phone changed the look: show it now, it beats random/transformed eyes
+    pendingPreview = false; previewUntilMs = now + 6000;
+    setVisitStyle(-1); setTransformStyle(-1);
+  }
   if (pendingVolume) { pendingVolume = false; dfSend(0x06, effectiveVolume()); }
   if (cmd >= 1000) playTrack(cmd - 1000, 1000, true);
 
