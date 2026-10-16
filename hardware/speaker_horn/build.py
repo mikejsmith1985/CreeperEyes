@@ -16,11 +16,17 @@ def box(x0, x1, y0, y1, z0, z1): return mf.Manifold.cube([x1-x0, y1-y0, z1-z0]).
 def spk(m): return m.rotate([pitch, yaw, 0]).translate([su, sv, horn])
 
 body = mf.Manifold.hull(box(*mouth_out, Z0, 2.5) + spk(cyl(R_out, 0.5, 0)))
-body = body + box(*flange, Z0, 2.0) + spk(cyl(R_out, LIP + POCKET, 0))
+# flange with a 45 deg chamfer underneath (no overhang when printed mouth-up)
+K = FL - WALL + 2.0
+inset = (flange[0] + K, flange[1] - K, flange[2] + K, flange[3] - K)
+body = body + mf.Manifold.hull(box(*flange, Z0, 2.0) + box(*inset, Z0, 2.0 + K)) + spk(cyl(R_out, LIP + POCKET, 0))
 chan = mf.Manifold.hull(box(*mouth_in, Z0 - 1, 0.6) + spk(cyl(THROAT_R, 0.1, -0.05)))
-chan = chan + spk(cyl(THROAT_R, LIP + 0.2, -0.1))
+# throat: 0.5 mm flat seat for the speaker rim, then a 45 deg cone in to the throat (no flat ceiling)
+SEAT = 0.5; rs = SPK_D/2 + CLR - SEAT; ch = rs - THROAT_R
+chan = chan + spk(cyl(THROAT_R, 0.2, -0.1)) + spk(mf.Manifold.cylinder(ch + 0.02, THROAT_R, rs, 128).translate([0, 0, LIP - ch]))
 pocket = spk(cyl(SPK_D/2 + CLR, POCKET + 1, LIP))
-notch = spk(box(-6, 6, 14, 26, LIP - 0.5, LIP + POCKET + 1))          # solder-tab / wire slot (top)
+# solder-tab / wire slot with a pointed 45 deg roof
+notch = spk(mf.Manifold.hull(box(-6, 6, 14, 26, LIP - 0.5, LIP + POCKET + 1) + box(-0.05, 0.05, 14, 26, LIP - 6.5, LIP - 0.5)))
 part = body - chan - pocket - notch
 for a in (0, 120, 240):                                                # crush ribs
     r = SPK_D/2 + CLR - 0.25
@@ -33,6 +39,7 @@ pad = np.pad(solid, 1)
 verts, faces, _, _ = measure.marching_cubes(pad.astype(np.float32), 0.5)
 verts = (verts - 1) * P + lo
 bm = trimesh.Trimesh(verts, faces[:, ::-1], process=True)
+trimesh.smoothing.filter_taubin(bm, iterations=25)                     # smooth the voxel steps on the glue face
 if bm.volume < 0: bm.invert()
 print('bust solid watertight', bm.is_watertight, 'vol %.1f cm3' % (bm.volume / 1000))
 bmf = mf.Manifold(mf.Mesh(bm.vertices.astype(np.float32), bm.faces.astype(np.uint32)))
