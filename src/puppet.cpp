@@ -222,7 +222,9 @@ static float    gazeX = 512, gazeY = 512, gazeTX = 512, gazeTY = 512, gazeRate =
 static int16_t  irisOverride = -1;
 static uint32_t irisUntilMs = 0;
 static uint32_t lastUpdateMs = 0;
-static volatile int pendingCmd = 0;     // 1 wake, 2 sleep, 1000+N play sound N
+static volatile int pendingCmd = 0;
+static volatile bool pendingPreview = false;   // a look setting changed: open the eyes so it shows
+static uint32_t previewUntilMs = 0;     // 1 wake, 2 sleep, 1000+N play sound N
 static volatile bool pendingVolume = false;
 static Target   lastTarget = {false, 0, 0};
 static float    lastDist = 0;
@@ -337,6 +339,7 @@ void puppetUpdate(uint32_t nowMicros) {
   pollDf();
 
   int cmd = pendingCmd; pendingCmd = 0;
+  if (pendingPreview) { pendingPreview = false; previewUntilMs = now + 6000; }
   if (pendingVolume) { pendingVolume = false; dfSend(0x06, effectiveVolume()); }
   if (cmd >= 1000) playTrack(cmd - 1000, 1000, true);
 
@@ -426,6 +429,7 @@ void puppetUpdate(uint32_t nowMicros) {
     case ASLEEP:
       lidTarget = 238;               // a sleepy sliver
       gazeTX = 512; gazeTY = 512 - 120 * (gSet.flipGazeY ? -1 : 1);     // eyes rolled down a bit
+      if (now < previewUntilMs) { lidTarget = 0; gazeTY = 512; }        // eyes open to show a new look
       staring = false; setTransformStyle(-1); setVisitStyle(-1);
       if (now > nextTwitchMs) {      // occasional twitch while sleeping
         lid = 190;
@@ -579,7 +583,7 @@ void puppetUpdate(uint32_t nowMicros) {
   outGazeValid = baseValid || (anyAntic && (antic == AN_ROLL || antic == AN_CROSS || antic == AN_LOOK || antic == AN_NOD));
 
   // ---------------- power saver ----------------
-  saving = gSet.powerSaver && alive && !phone && state == ASLEEP && since(now, stateSinceMs) > 20000;
+  saving = gSet.powerSaver && alive && !phone && state == ASLEEP && since(now, stateSinceMs) > 20000 && now >= previewUntilMs;
 }
 
 bool puppetGaze(uint8_t eye, int16_t *x, int16_t *y) {
@@ -599,6 +603,8 @@ uint8_t  puppetBrightness() { return saving ? max(1, gSet.brightness / 4) : gSet
 uint8_t  puppetFrameDelayMs() { return saving ? 35 : 0; }
 
 void puppetApplyVolume() { pendingVolume = true; }   // sent from the render thread
+
+void puppetPreviewLook() { pendingPreview = true; }
 
 void puppetCommand(const String &cmd) {
   if (cmd == "wake") pendingCmd = 1;

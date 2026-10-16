@@ -57,6 +57,7 @@ uint8_t puppetFrameDelayMs();            // extra delay per frame pair (power sa
 // Used by the web page (called from the web task; everything is handed to the render thread)
 void    puppetApplyVolume();                 // push gSet.volume (kid mode aware) to the DFPlayer
 void    puppetCommand(const String &cmd);    // "wake", "sleep", "sound:N"
+void    puppetPreviewLook();                 // open his eyes for a few seconds (look changed while asleep)
 void    puppetPhone(int x, int y, int action); // x,y 0-1023 or -1; action PuppetAction or 100+N sound
 void    puppetResetVisitsTonight();
 void    puppetSaveVisitsIfNeeded();          // call periodically from the web task
