@@ -47,7 +47,7 @@ progress{width:100%;height:10px;accent-color:var(--acc)}
  <div id="status"><div class="stat"><span>Monster</span><b id="st">…</b></div><div class="stat"><span>Radar sees</span><b id="rd">…</b></div>
   <div class="stat" style="grid-column:1/3"><span>What the radar sees (top view, bust at the bottom; green dot = where he's looking)</span><canvas id="rv" width="600" height="300" style="width:100%;margin-top:6px;border-radius:8px;background:#0b0f0c"></canvas></div>
   <div class="stat"><span>Visitors tonight</span><b id="vt">…</b></div><div class="stat"><span>All-time</span><b id="va">…</b></div></div>
- <div class="btns" style="margin-top:10px"><button onclick="cmd(this,'wake')">Wake up</button><button onclick="cmd(this,'sleep')">Go to sleep</button><button onclick="resetVisits(this)">Reset tonight</button></div>
+ <div class="btns" style="margin-top:10px"><button onclick="cmd(this,'wake')">Wake up</button><button onclick="cmd(this,'sleep')">Go to sleep</button><button onclick="cmd(this,'storm')">Lightning!</button><button onclick="resetVisits(this)">Reset tonight</button></div>
 </section>
 
 <section class="pp" id="pup"><h2>Puppet mode</h2>
@@ -117,6 +117,14 @@ progress{width:100%;height:10px;accent-color:var(--acc)}
  <div class="btns"><button onclick="setPw()">Change password</button><button class="warn" onclick="resetAll()">Reset to defaults</button></div>
 </section>
 
+<section><h2>Storm backdrop</h2>
+ <div class="row"><label>Lightning on its own<small>Random strikes, thunder follows, he flinches</small></label><input type="checkbox" class="sw" data-k="stormAuto"></div>
+ <div class="row"><label>About every</label><input type="range" min="20" max="300" step="10" data-k="stormEveryS" data-u="s"><output></output></div>
+ <div class="row"><label>Lightning brightness<small>Lower it if the power bank cuts out</small></label><input type="range" min="10" max="100" step="5" data-k="stormBright" data-u="%"><output></output></div>
+ <div class="row"><label>Background glow<small>Stormy sky + candle-lit windows between strikes</small></label><input type="range" min="0" max="100" step="5" data-k="glowBright" data-u="%"><output></output></div>
+ <div class="btns" style="margin-top:8px"><button class="pri" onclick="cmd(this,'storm')">Lightning now</button></div>
+</section>
+
 <section><h2>Firmware update</h2>
  <div class="row"><label>Installed<small id="fw">…</small></label></div>
  <div class="row"><label>Update file<small id="fwfile">creepereyes-v….bin, downloaded to this phone beforehand</small></label><input type="file" id="fwf" accept=".bin" style="max-width:150px" onchange="pickFw()"></div>
@@ -129,7 +137,7 @@ progress{width:100%;height:10px;accent-color:var(--acc)}
 <script>
 const $=s=>document.querySelectorAll(s);let t,S={};
 function toast(m){const e=document.getElementById('toast');e.textContent=m||'Saved';e.classList.add('on');clearTimeout(t);t=setTimeout(()=>e.classList.remove('on'),1400)}
-function fmt(el){const u=el.dataset.u,v=+el.value;return u=='m'?(v/1000).toFixed(v<1000?2:1)+' m':u=='s'?v+' s':u=='x'?'×'+v:v}
+function fmt(el){const u=el.dataset.u,v=+el.value;return u=='m'?(v/1000).toFixed(v<1000?2:1)+' m':u=='s'?v+' s':u=='x'?'×'+v:u=='%'?v+' %':v}
 function key(el){const b=el.closest('.eyebox');return el.dataset.k+(b?b.dataset.eye:'')}
 function fill(s){S=s;
  if(s.styles)$('select.styles').forEach(sel=>{if(sel.options.length!=s.styles.length)sel.innerHTML=s.styles.map((n,i)=>'<option value="'+i+'">'+n+'</option>').join('')});
@@ -158,7 +166,7 @@ async function setPw(){const p=document.getElementById('pw').value;if(p.length<8
 async function resetAll(){if(!confirm('Reset all settings (except Wi-Fi password)?'))return;fill(await post('/api/reset',{}));toast('Reset')}
 const $1=id=>document.getElementById(id);
 // ---------- editable sounds ----------
-let SC=null;const ROLES=[['wake','Waking up'],['growl','Random growls'],['lean','Someone leans in'],['roar','Jump scare / transformation'],['snore','Snoring while asleep'],['hmm','Friendly "hmm?" (kid mode)'],['chuckle','Chuckle (loses staring contest)']];
+let SC=null;const ROLES=[['wake','Waking up'],['growl','Random growls'],['lean','Someone leans in'],['roar','Jump scare / transformation'],['snore','Snoring while asleep'],['hmm','Friendly "hmm?" (kid mode)'],['chuckle','Chuckle (loses staring contest)'],['thunder','Thunder after lightning']];
 const esc=t=>String(t).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 function drawSoundButtons(){document.querySelectorAll('.sndbtns').forEach(d=>{d.innerHTML=SC.buttons.map(b=>'<button onclick="cmd(this,\'sound:'+b.t+'\')">'+esc(b.n)+'</button>').join('')})}
 function drawEditor(){$1('sfiles').textContent=SC.files?('The card has '+SC.files+' files: number '+'1 = 0001.mp3, 2 = 0002.mp3 and so on (folder "mp3").'):'File 1 = 0001.mp3, 2 = 0002.mp3 and so on, in the card\'s "mp3" folder.';

@@ -7,7 +7,7 @@ volatile bool gSettingsDirty = true;   // apply once at boot
 
 static Preferences prefs;
 static const char *NS = "creeper";
-static const uint16_t kVersion = 5;    // bump if the struct layout changes
+static const uint16_t kVersion = 6;    // bump if the struct layout changes
 
 // Layout of version 1 (single look for both eyes), so old saves carry over.
 struct SettingsV1 {
@@ -32,6 +32,10 @@ void settingsReset() {
   gSet.powerSaver  = true;
   gSet.rangeMm     = 2000;
   gSet.followGain  = 4;
+  gSet.stormAuto   = true;
+  gSet.stormEveryS = 60;
+  gSet.stormBright = 70;
+  gSet.glowBright  = 60;
   gSet.brightness  = 15;
   gSet.autoBlink   = true;
   gSet.volume      = 25;
@@ -49,6 +53,10 @@ void settingsLoad() {
   uint16_t ver = prefs.getUShort("ver", 0);
   if (ver == kVersion && prefs.getBytesLength("set") == sizeof(Settings)) {
     prefs.getBytes("set", &gSet, sizeof(Settings));
+  } else if (ver == 5 && prefs.getBytesLength("set") >= offsetof(Settings, stormAuto)) {
+    size_t n = prefs.getBytesLength("set");            // v5 struct = everything before the storm block
+    uint8_t *b = (uint8_t *)malloc(n);
+    if (b) { prefs.getBytes("set", b, n); memcpy(&gSet, b, offsetof(Settings, stormAuto)); free(b); }
   } else if (ver == 4 && prefs.getBytesLength("set") >= offsetof(Settings, followGain)) {
     size_t n = prefs.getBytesLength("set");            // v4 struct = everything before followGain
     uint8_t *b = (uint8_t *)malloc(n);
@@ -68,6 +76,8 @@ void settingsLoad() {
   }
   prefs.end();
   if (gSet.followGain < 1 || gSet.followGain > 5) gSet.followGain = 4;
+  gSet.stormEveryS = constrain(gSet.stormEveryS, 20, 600); gSet.stormBright = constrain(gSet.stormBright, 10, 100);
+  if (gSet.glowBright > 100) gSet.glowBright = 60;
   gSet.wifiPass[sizeof(gSet.wifiPass) - 1] = 0;
   if (strlen(gSet.wifiPass) < 8) strlcpy(gSet.wifiPass, "frankenstein", sizeof(gSet.wifiPass));
   gSettingsDirty = true;

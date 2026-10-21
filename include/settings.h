@@ -43,6 +43,12 @@ struct Settings {
 
   // ---- added in v5 ----
   uint8_t  followGain;    // 1..5: how exaggerated the eyes follow people (1 = realistic)
+
+  // ---- added in v6: backdrop storm lights ----
+  bool     stormAuto;     // lightning strikes on its own now and then
+  uint16_t stormEveryS;   // average seconds between strikes
+  uint8_t  stormBright;   // lightning brightness 10..100 %
+  uint8_t  glowBright;    // background glow + candle windows 0..100 %
 };
 
 extern Settings gSet;

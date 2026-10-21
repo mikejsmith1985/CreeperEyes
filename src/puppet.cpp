@@ -1,5 +1,6 @@
 // puppet.cpp -- see include/puppet.h for what this does and how it is wired.
 #include "puppet.h"
+#include "storm.h"
 void webuiSerialSet(const char *kv);   // webui.cpp
 #include "settings.h"
 #include "eyestyle.h"
@@ -223,7 +224,8 @@ static int16_t  irisOverride = -1;
 static uint32_t irisUntilMs = 0;
 static uint32_t lastUpdateMs = 0;
 static volatile int pendingCmd = 0;     // 1 wake, 2 sleep, 1000+N play sound N
-static volatile bool pendingPreview = false;   // a look setting changed: open the eyes so it shows
+static volatile bool pendingPreview = false;
+static volatile bool pendingFlash = false, pendingThunder = false;   // a look setting changed: open the eyes so it shows
 static uint32_t previewUntilMs = 0;
 static volatile bool pendingVolume = false;
 static Target   lastTarget = {false, 0, 0};
@@ -341,6 +343,12 @@ void puppetUpdate(uint32_t nowMicros) {
   pollDf();
 
   int cmd = pendingCmd; pendingCmd = 0;
+  if (pendingFlash) {                // lightning: pupils snap tiny, eyes fly open
+    pendingFlash = false;
+    irisOverride = kIrisMin; irisUntilMs = now + 1400; lid = 0;
+    if (state == ASLEEP) { lid = 120; }          // a sleepy flinch
+  }
+  if (pendingThunder) { pendingThunder = false; playTrack(soundForRole(R_THUNDER), 2500, true); }
   if (pendingPreview) {              // the phone changed the look: show it now, it beats random/transformed eyes
     pendingPreview = false; previewUntilMs = now + 6000;
     setVisitStyle(-1); setTransformStyle(-1);
@@ -610,10 +618,12 @@ uint8_t  puppetFrameDelayMs() { return saving ? 35 : 0; }
 void puppetApplyVolume() { pendingVolume = true; }   // sent from the render thread
 
 void puppetPreviewLook() { pendingPreview = true; }
+void puppetStormReaction(int phase) { if (phase == 0) pendingFlash = true; else pendingThunder = true; }
 
 void puppetCommand(const String &cmd) {
   if (cmd == "wake") pendingCmd = 1;
   else if (cmd == "sleep") pendingCmd = 2;
+  else if (cmd == "storm") stormStrike();
   else if (cmd.startsWith("sound:")) pendingCmd = 1000 + constrain(cmd.substring(6).toInt(), 1, 2999);
 }
 

@@ -4,19 +4,22 @@
 
 static SoundCfg cfg;
 static portMUX_TYPE mux = portMUX_INITIALIZER_UNLOCKED;   // web task writes, render thread reads
-static const char *kRoleKeys[R_COUNT] = {"wake", "growl", "lean", "roar", "snore", "hmm", "chuckle"};
-static const uint8_t kVer = 1;
+static const char *kRoleKeys[R_COUNT] = {"wake", "growl", "lean", "roar", "snore", "hmm", "chuckle", "thunder"};
+static const uint8_t kVer = 2;
+struct SoundCfgV1 {             // before the thunder role existed
+  uint8_t nButtons; SoundButton buttons[SND_MAX_BUTTONS]; uint8_t nRole[7]; uint16_t role[7][SND_MAX_PER_ROLE];
+};
 
 static void defaults(SoundCfg &c) {
   memset(&c, 0, sizeof(c));
   const struct { const char *n; uint16_t t; } b[] = {
     {"Groan", 1}, {"Growl 1", 2}, {"Growl 2", 3}, {"Growl 3", 4}, {"Moan", 5}, {"Mmm...", 6},
-    {"Roar", 7}, {"Snore", 8}, {"Hmm?", 9}, {"Chuckle", 10}};
+    {"Roar", 7}, {"Snore", 8}, {"Hmm?", 9}, {"Chuckle", 10}, {"Thunder", 11}};
   c.nButtons = sizeof(b) / sizeof(b[0]);
   for (int i = 0; i < c.nButtons; i++) { strlcpy(c.buttons[i].name, b[i].n, sizeof(c.buttons[i].name)); c.buttons[i].track = b[i].t; }
   auto set = [&](SoundRole r, std::initializer_list<uint16_t> l) { c.nRole[r] = 0; for (auto t : l) c.role[r][c.nRole[r]++] = t; };
   set(R_WAKE, {1}); set(R_GROWL, {2, 3, 4, 5}); set(R_LEAN, {6}); set(R_ROAR, {7});
-  set(R_SNORE, {8}); set(R_HMM, {9}); set(R_CHUCKLE, {10});
+  set(R_SNORE, {8}); set(R_HMM, {9}); set(R_CHUCKLE, {10}); set(R_THUNDER, {11, 12, 13});
 }
 
 static void save() {
@@ -26,7 +29,14 @@ static void save() {
 void soundCfgLoad() {
   defaults(cfg);
   Preferences p; p.begin("creepers", true);
-  if (p.getUChar("ver", 0) == kVer && p.getBytesLength("cfg") == sizeof(cfg)) p.getBytes("cfg", &cfg, sizeof(cfg));
+  uint8_t v = p.getUChar("ver", 0);
+  if (v == kVer && p.getBytesLength("cfg") == sizeof(cfg)) p.getBytes("cfg", &cfg, sizeof(cfg));
+  else if (v == 1 && p.getBytesLength("cfg") == sizeof(SoundCfgV1)) {   // keep the user's buttons, add thunder
+    SoundCfgV1 o; p.getBytes("cfg", &o, sizeof(o));
+    cfg.nButtons = o.nButtons; memcpy(cfg.buttons, o.buttons, sizeof(o.buttons));
+    memcpy(cfg.nRole, o.nRole, sizeof(o.nRole)); memcpy(cfg.role, o.role, sizeof(o.role));
+    if (cfg.nButtons < SND_MAX_BUTTONS) { strlcpy(cfg.buttons[cfg.nButtons].name, "Thunder", 20); cfg.buttons[cfg.nButtons++].track = 11; }
+  }
   p.end();
 }
 

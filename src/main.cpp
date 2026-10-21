@@ -21,7 +21,8 @@
 #include <Adafruit_GFX.h>      // Core graphics lib for Adafruit displays
 #include <HardwareSerial.h>    // Needed for 2nd serial port on ESP32
 
-#include "eyestyle.h"          // All selectable eye looks (see tools/eyegen.py)
+#include "eyestyle.h"
+#include "storm.h"          // All selectable eye looks (see tools/eyegen.py)
 #include "puppet.h"            // Radar-driven behaviour + DFPlayer sound
 #include "settings.h"          // User settings (saved in flash)
 #include "webui.h"             // Wi-Fi settings page (+ gOtaActive)
@@ -123,6 +124,7 @@ void setup(void) {
   applySettings(); gSettingsDirty = false;   // eye looks, colours, brightness
   puppetSetup();                   // radar + sound (falls back to normal eyes if radar absent)
   webuiStart();                    // CreeperEyes-XXXX Wi-Fi + settings page
+  stormStart();                    // backdrop LEDs: glow, candle windows, lightning
   
   // One of the displays is configured to mirror on the X axis.  Simplifies
   // eyelid handling in the drawEye() function -- no need for distinct

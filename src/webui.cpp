@@ -64,7 +64,7 @@ static void sendSettings() {
     j += "\"irisColor" + String(side[e]) + "\":\"" + hex6(L.irisColor) + "\",";
     j += "\"eyelidColor" + String(side[e]) + "\":\"" + hex6(L.eyelidColor) + "\",";
   }
-  char b[420];
+  char b[560];
   snprintf(b, sizeof(b),
     "\"linkEyes\":%s,\"brightness\":%u,\"autoBlink\":%s,\"volume\":%u,\"wakeDistMm\":%u,\"leanDistMm\":%u,"
     "\"sleepAfterS\":%u,\"flipGazeX\":%s,\"flipGazeY\":%s,\"ssid\":\"%s\",",
@@ -75,11 +75,13 @@ static void sendSettings() {
   snprintf(b, sizeof(b),
     "\"kidMode\":%s,\"randomEyes\":%s,\"transforms\":%s,\"jumpScares\":%s,\"antics\":%s,"
     "\"sleepSounds\":%s,\"powerSaver\":%s,\"rangeMm\":%u,\"followGain\":%u,"
-    "\"fw\":\"%s\",\"fwGit\":\"%s\",\"fwEpoch\":%lu,\"fwInstalled\":%lu,",
+    "\"fw\":\"%s\",\"fwGit\":\"%s\",\"fwEpoch\":%lu,\"fwInstalled\":%lu,"
+    "\"stormAuto\":%s,\"stormEveryS\":%u,\"stormBright\":%u,\"glowBright\":%u,",
     gSet.kidMode ? "true" : "false", gSet.randomEyes ? "true" : "false", gSet.transforms ? "true" : "false",
     gSet.jumpScares ? "true" : "false", gSet.antics ? "true" : "false", gSet.sleepSounds ? "true" : "false",
     gSet.powerSaver ? "true" : "false", gSet.rangeMm, gSet.followGain,
-    FW_VERSION, FW_GIT, (unsigned long)FW_EPOCH, (unsigned long)fwInstalledAt);
+    FW_VERSION, FW_GIT, (unsigned long)FW_EPOCH, (unsigned long)fwInstalledAt,
+    gSet.stormAuto ? "true" : "false", gSet.stormEveryS, gSet.stormBright, gSet.glowBright);
   j += b;
   j += "\"styles\":[";
   for (int i = 0; i < kEyeStyleCount; i++) { if (i) j += ","; j += "\""; j += kEyeStyles[i].name; j += "\""; }
@@ -107,6 +109,10 @@ static bool setOne(const String &k, const String &v) {
     else if (k == "wakeDistMm")  gSet.wakeDistMm  = constrain(n, 300, 6000);
     else if (k == "rangeMm")     gSet.rangeMm     = constrain(n, 500, 6000);
     else if (k == "followGain")  gSet.followGain  = constrain(n, 1, 5);
+    else if (k == "stormAuto")   gSet.stormAuto   = on;
+    else if (k == "stormEveryS") gSet.stormEveryS = constrain(n, 20, 600);
+    else if (k == "stormBright") gSet.stormBright = constrain(n, 10, 100);
+    else if (k == "glowBright")  gSet.glowBright  = constrain(n, 0, 100);
     else if (k == "leanDistMm")  gSet.leanDistMm  = constrain(n, 150, 1500);
     else if (k == "sleepAfterS") gSet.sleepAfterS = constrain(n, 2, 120);
     else if (k == "flipGazeX")   gSet.flipGazeX   = on;

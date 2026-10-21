@@ -3,7 +3,7 @@
 #pragma once
 #include <Arduino.h>
 
-enum SoundRole : uint8_t { R_WAKE, R_GROWL, R_LEAN, R_ROAR, R_SNORE, R_HMM, R_CHUCKLE, R_COUNT };
+enum SoundRole : uint8_t { R_WAKE, R_GROWL, R_LEAN, R_ROAR, R_SNORE, R_HMM, R_CHUCKLE, R_THUNDER, R_COUNT };
 #define SND_MAX_BUTTONS 16
 #define SND_MAX_PER_ROLE 8
 
