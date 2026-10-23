@@ -5,7 +5,7 @@
 
 #define STORM_PIN      27     // strip DIN (through a 330 ohm resistor)
 #define STORM_ROWS     3      // strip laid in 3 rows on the back of the light box, zig-zag,
-#define STORM_PER_ROW  19     //   starting bottom-left (wire exit), 19 LEDs per row at 60 LED/m
+#define STORM_PER_ROW  18     //   starting bottom-left (wire exit), 18 LEDs per row at 60 LED/m (300 mm)
 #define STORM_LEDS     (STORM_ROWS * STORM_PER_ROW)
 
 void stormStart();            // call once in setup()

@@ -5,10 +5,10 @@ from shapely import affinity
 sys.path.insert(0, '.')
 import scene
 
-S = 340.0 / scene.W            # art is drawn at 220, built at 340 (taller than the 311 mm monster)
-V = 340.0                      # visible window
+S = 314.0 / scene.W            # art drawn at 220, built at 314 (330 mm parts leave room on the XL bed)
+V = 314.0                      # visible window
 B = 8.0                        # border clamped between frames
-P = V + 2 * B                  # 296: layer / ring / light box size
+P = V + 2 * B                  # 330: layer / ring / light box size
 LAYER_T, GAP = 2.0, 10.0       # silhouette thickness, depth between layers
 PIN_D, PIN_IN = 2.2, 4.0       # alignment pin holes (use 1.75 mm filament as pins)
 LITHO_MIN, LITHO_MAX = 0.6, 3.2
