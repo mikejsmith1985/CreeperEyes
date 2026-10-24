@@ -4,3 +4,6 @@ site/manifest.json
 # 66 MB lithophane mesh: rebuild with python3 build.py
 hardware/backdrop/stl/CreeperBackdrop_1_sky_lithophane.stl
 hardware/backdrop/CreeperBackdrop_STLs.zip
+hardware/backdrop/fit_bust_bottom.stl
+hardware/backdrop/plinth_xy0.npy
+hardware/backdrop/plinth_dbg.py
