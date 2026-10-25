@@ -19,9 +19,10 @@ static void layout() {
       ledY[i] = (r + 0.5f) / STORM_ROWS;
     }
 }
-// how much an LED lights the house windows (house sits right of centre, mid height)
+// how much an LED lights the house windows. Layers are fitted with their bed side to the viewer,
+// so the scene is mirrored from the drawing: the house ends up left of centre, mid height.
 static float houseW(int i) {
-  float dx = (ledX[i] - 0.66f) / 0.12f, dy = (ledY[i] - 0.48f) / 0.22f;
+  float dx = (ledX[i] - 0.34f) / 0.12f, dy = (ledY[i] - 0.48f) / 0.22f;
   return expf(-(dx * dx + dy * dy));
 }
 
