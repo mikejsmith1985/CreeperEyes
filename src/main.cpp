@@ -21,16 +21,23 @@
 #include <Adafruit_GFX.h>      // Core graphics lib for Adafruit displays
 #include <HardwareSerial.h>    // Needed for 2nd serial port on ESP32
 
-// Slightly modified headers in the eye include files to be able to include 2 and switch between them
-// The ESP32 has a lot of memory, so this works fine
-#include "defaultEye.h"        // Standard human-ish hazel eye
-#include "newtEye.h"           // Eye of newt
+#include "eyestyle.h"
+#include "storm.h"          // All selectable eye looks (see tools/eyegen.py)
+#include "puppet.h"            // Radar-driven behaviour + DFPlayer sound
+#include "settings.h"          // User settings (saved in flash)
+#include "webui.h"             // Wi-Fi settings page (+ gOtaActive)
 
-const uint16_t (*sclera)[SCLERA_WIDTH] = scleraDefault;
-const uint8_t (*upper)[SCREEN_WIDTH] = upperDefault;
-const uint8_t (*lower)[SCREEN_WIDTH] = lowerDefault;
-const uint16_t (*polar)[80] = polarDefault;
-const uint16_t (*iris)[IRIS_MAP_WIDTH] = irisDefault;
+#define SCREEN_WIDTH  128
+#define SCREEN_HEIGHT 128
+
+// Per-eye look, rebuilt from the settings by applySettings().
+struct EyeRender {
+  const EyeStyle *s;
+  uint16_t eyelid;        // RGB565 eyelid colour
+  bool     recolor;       // tint the iris with irisLut
+  uint16_t irisLut[64];   // luminance (0-62) -> tinted RGB565
+};
+static EyeRender er[2];
 
 // DISPLAY HARDWARE CONFIG -------------------------------------------------
 
@@ -42,15 +49,18 @@ typedef Adafruit_SSD1351 displayType; // Using OLED display(s)
 #define DISPLAY_RESET   5 // Reset pin for BOTH displays
 #define SELECT_L_PIN    17 // LEFT eye chip select pin
 #define SELECT_R_PIN    04 // RIGHT eye chip select pin
-#define UART_RX_PIN     13 // Pin to receive UART commands from controller
 
 // INPUT CONFIG (for eye motion -- enable or comment out as needed) --------
 
-#define TRACKING          // If enabled, eyelid tracks pupil
+//#define TRACKING        // If enabled, eyelid tracks pupil (off: lids stay open except when blinking)
 #define IRIS_SMOOTH       // If enabled, filter input from IRIS_PIN
-#define IRIS_MIN      150 // Clip lower analogRead() range from IRIS_PIN (WAS: 120) - Reduced range so that it doesn't look to odd with multiple eye pairs
-#define IRIS_MAX      400 // Clip upper "                                (WAS: 720) - Reduced range so that it doesn't look to odd with multiple eye pairs
+#define TRACK_TRAVEL_X 56  // px the iris may move left/right of centre while following someone
+#define TRACK_TRAVEL_Y 40  // px up/down
+#define IRIS_MIN      150 // Shared pupil animation range; each eye style maps it onto its own range
+#define IRIS_MAX      400
 #define AUTOBLINK        // If enabled, eyes blink autonomously
+// Eyelid colour, iris colour, eye style, brightness and blinking are set from the
+// web page (see settings.h) and applied by applySettings() below.
 
 // Probably don't need to edit any config below this line, -----------------
 // unless building a single-eye project (pendant, etc.), in which case one
@@ -76,21 +86,22 @@ struct {
   eyeBlink    blink;   // Current blink state
 } eye[] = { // OK to comment out one of these for single-eye display:
   // displayType(SELECT_L_PIN,DISPLAY_DC,0),SELECT_L_PIN,{NOBLINK},
-  Adafruit_SSD1351(128, 128, &SPI, SELECT_L_PIN, DISPLAY_DC, DISPLAY_RESET), SELECT_L_PIN,{NOBLINK},
-  Adafruit_SSD1351(128, 128, &SPI, SELECT_R_PIN, DISPLAY_DC, DISPLAY_RESET), SELECT_L_PIN,{NOBLINK},
+  Adafruit_SSD1351(128, 128, &SPI, SELECT_L_PIN, DISPLAY_DC, -1), SELECT_L_PIN,{NOBLINK},
+  Adafruit_SSD1351(128, 128, &SPI, SELECT_R_PIN, DISPLAY_DC, -1), SELECT_R_PIN,{NOBLINK},
   // displayType(SELECT_R_PIN,DISPLAY_DC,0),SELECT_R_PIN,{NOBLINK},
 };
 #define NUM_EYES (sizeof(eye) / sizeof(eye[0]))
 
 // INITIALIZATION -- runs once at startup ----------------------------------
 
-HardwareSerial SerialIn(1);
+void applySettings();
 
 void setup(void) {
   uint8_t e;
 
   Serial.begin(921600);
-  // SerialIn.begin(9600, SERIAL_8N1, UART_RX_PIN); // disabled
+  puppetEarly();
+  settingsLoad();
   randomSeed(analogRead(A3)); // Seed random() from floating analog input
 
   // Both displays share a common reset line; 0 is passed to display
@@ -108,6 +119,12 @@ void setup(void) {
     eye[e].display.begin();
     digitalWrite(eye[e].cs, HIGH); // Deselect
   }
+
+  eyesLoad();                      // map eye graphics from the 'eyes' flash partition
+  applySettings(); gSettingsDirty = false;   // eye looks, colours, brightness
+  puppetSetup();                   // radar + sound (falls back to normal eyes if radar absent)
+  webuiStart();                    // CreeperEyes-XXXX Wi-Fi + settings page
+  stormStart();                    // backdrop LEDs: glow, candle windows, lightning
   
   // One of the displays is configured to mirror on the X axis.  Simplifies
   // eyelid handling in the drawEye() function -- no need for distinct
@@ -121,44 +138,63 @@ void setup(void) {
 // EYE-RENDERING FUNCTION --------------------------------------------------9
 void drawEye( // Renders one eye.  Inputs must be pre-clipped & valid.
   uint8_t  e,       // Eye array index; 0 or 1 for left/right
-  uint32_t iScale,  // Scale factor for iris
-  uint8_t  scleraX, // First pixel X offset into sclera image
-  uint8_t  scleraY, // First pixel Y offset into sclera image
+  uint16_t iScale,  // Iris scale 0-1023 (bigger = bigger pupil), already in this style's range
+  int16_t  scleraX, // First pixel X offset into sclera image (may run past the edges:
+  int16_t  scleraY, // the sclera's edge pixels are repeated, so the iris can travel further)
   uint8_t  uT,      // Upper eyelid threshold value
   uint8_t  lT) {    // Lower eyelid threshold value
 
-  uint8_t  screenX, screenY, scleraXsave;
+  const EyeRender &r = er[e];
+  static uint16_t pBurst[SCREEN_WIDTH*SCREEN_HEIGHT]; // Full frame buffer possible on ESP32
+  if(!r.s) {                                          // eye graphics missing: dim red screen
+    for(int i = 0; i < SCREEN_WIDTH*SCREEN_HEIGHT; i++) pBurst[i] = 0x2000;
+    eye[e].display.startWrite();
+    eye[e].display.writeCommand(SSD1351_CMD_SETROW);    eye[e].display.write16(0); eye[e].display.write16(SCREEN_HEIGHT - 1);
+    eye[e].display.writeCommand(SSD1351_CMD_SETCOLUMN); eye[e].display.write16(0); eye[e].display.write16(SCREEN_WIDTH - 1);
+    eye[e].display.writeCommand(SSD1351_CMD_WRITERAM);
+    SPI.writePixels((uint8_t*)pBurst, sizeof(pBurst));
+    eye[e].display.endWrite();
+    return;
+  }
+  const EyeStyle  &s = *r.s;
+  uint8_t  screenX, screenY;
+  int16_t  scleraXsave;
   int16_t  irisX, irisY;
   uint16_t p, a, burstIdx;
   uint32_t d;
-  static uint16_t pBurst[SCREEN_WIDTH*SCREEN_HEIGHT]; // Full frame buffer possible on ESP32
-    
-  // Set up raw pixel dump to entire screen.  Although such writes can wrap
-  // around automatically from end of rect back to beginning, the region is
-  // reset on each frame here in case of an SPI glitch.
+
+  uint8_t  irisThreshold = (128 * (1023 - iScale) + 512) / 1024;
+  if(irisThreshold < 1) irisThreshold = 1;
+  uint32_t irisScale = (uint32_t)s.irisMapH * 65536 / irisThreshold;
 
   scleraXsave = scleraX; // Save initial X value to reset on each line
-  irisY       = scleraY - (SCLERA_HEIGHT - IRIS_HEIGHT) / 2;
+  irisY       = scleraY - (s.scleraH - s.irisH) / 2;
   burstIdx = 0;
   for(screenY=0; screenY<SCREEN_HEIGHT; screenY++, scleraY++, irisY++) {
     scleraX = scleraXsave;
-    irisX   = scleraXsave - (SCLERA_WIDTH - IRIS_WIDTH) / 2;
+    irisX   = scleraXsave - (s.scleraW - s.irisW) / 2;
+    const uint8_t  *upRow = s.upper  + screenY * SCREEN_WIDTH;
+    const uint8_t  *loRow = s.lower  + screenY * SCREEN_WIDTH;
+    const uint16_t *scRow = s.sclera + constrain(scleraY, 0, (int)s.scleraH - 1) * s.scleraW;
+    const int16_t   scMaxX = s.scleraW - 1;
     for(screenX=0; screenX<SCREEN_WIDTH; screenX++, scleraX++, irisX++) {
-      int effectiveX = e == 1 ? screenX : SCREEN_WIDTH - screenX;
-      if((lower[screenY][effectiveX] <= lT) ||
-         (upper[screenY][effectiveX] <= uT)) {             // Covered by eyelid
-        p = 0;
-      } else if((irisY < 0) || (irisY >= IRIS_HEIGHT) ||
-                (irisX < 0) || (irisX >= IRIS_WIDTH)) { // In sclera
-        p = sclera[scleraY][scleraX];
-      } else {                                          // Maybe iris...
-        p = polar[irisY][irisX];                        // Polar angle/dist
-        d = (iScale * (p & 0x7F)) / 128;                // Distance (Y)
-        if(d < IRIS_MAP_HEIGHT) {                       // Within iris area
-          a = (IRIS_MAP_WIDTH * (p >> 7)) / 512;        // Angle (X)
-          p = iris[d][a];                               // Pixel = iris
-        } else {                                        // Not in iris
-          p = sclera[scleraY][scleraX];                 // Pixel = sclera
+      int effectiveX = e == 1 ? screenX : SCREEN_WIDTH - 1 - screenX;
+      if((loRow[effectiveX] <= lT) || (upRow[effectiveX] <= uT)) {   // Covered by eyelid
+        p = r.eyelid;
+      } else if((irisY < 0) || (irisY >= s.irisH) ||
+                (irisX < 0) || (irisX >= s.irisW)) {              // In sclera
+        p = scRow[scleraX < 0 ? 0 : scleraX > scMaxX ? scMaxX : scleraX];
+      } else {                                                    // Maybe iris...
+        p = s.polar[irisY * s.irisW + irisX];                     // Polar angle/dist
+        d = p & 0x7F;                                             // Distance (0-127)
+        if(d < irisThreshold) {                                   // Within scaled iris area
+          d = d * irisScale >> 16;                                // -> iris image row
+          if(d >= s.irisMapH) d = s.irisMapH - 1;
+          a = (s.irisMapW * (p >> 7)) / 512;                      // Angle (X)
+          p = s.iris[d * s.irisMapW + a];
+          if(r.recolor) p = r.irisLut[(((p >> 11) * 154) + (((p >> 5) & 63) * 150) + ((p & 31) * 58)) >> 8];
+        } else {
+          p = scRow[scleraX < 0 ? 0 : scleraX > scMaxX ? scMaxX : scleraX];                                     // Pupil / sclera
         }
       }
       pBurst[burstIdx++] = p;
@@ -208,6 +244,32 @@ uint32_t timeOfLastBlink = 0L, timeToNextBlink = 0L;
 #define SER_CMD_SIZE 9
 uint16_t serAddr = 1;
 
+// Applies the web-page settings. Runs on the render thread between frames.
+void applySettings() {
+  for(uint8_t e = 0; e < NUM_EYES; e++) {
+    const EyeLook &L = gSet.eye[e];
+    EyeRender &r = er[e];
+    int16_t st = puppetStyle(e) >= 0 ? puppetStyle(e) : L.style;   // temporary looks win
+    r.s       = kEyeStyleCount ? &kEyeStyles[st < kEyeStyleCount ? st : 0] : nullptr;
+    r.eyelid  = rgb888to565(L.eyelidColor);
+    r.recolor = L.irisMode == 1;
+    if(r.recolor) {                   // keep the iris texture, change its hue
+      uint32_t c = L.irisColor;
+      uint16_t cr = (c >> 16) & 0xFF, cg = (c >> 8) & 0xFF, cb = c & 0xFF;
+      for(int i = 0; i < 64; i++) {
+        uint16_t lum = min(255, i * 255 / 62 * 2);
+        r.irisLut[i] = rgb888to565(((cr * lum / 255) << 16) | ((cg * lum / 255) << 8) | (cb * lum / 255));
+      }
+    }
+  }
+  // brightness is applied in frame() (it also handles the power saver)
+  static const EyeStyle *was[2] = {nullptr, nullptr};
+  if(er[0].s != was[0] || er[1].s != was[1]) {
+    was[0] = er[0].s; was[1] = er[1].s;
+    Serial.printf("[look] left=%s right=%s\n", er[0].s ? er[0].s->name : "-", er[1].s ? er[1].s->name : "-");
+  }
+}
+
 void frame( // Process motion for a single frame of left or right eye
   uint16_t        iScale) {     // Iris scale (0-1023) passed in
   static uint32_t frames   = 0; // Used in frame rate calculation
@@ -219,7 +281,23 @@ void frame( // Process motion for a single frame of left or right eye
   static uint16_t serNewEyeCtrl = 0;
   static uint16_t serEyeCtrl = 0;
 
+  if(gOtaActive) { delay(20); return; }      // wireless update in progress: stop drawing
   if(++eyeIndex >= NUM_EYES) eyeIndex = 0; // Cycle through eyes, 1 per call
+  if(eyeIndex == 0) {
+    static uint16_t styleVer = 0;
+    if(gSettingsDirty || styleVer != puppetStyleVersion()) {
+      gSettingsDirty = false; styleVer = puppetStyleVersion(); applySettings();
+    }
+    static uint8_t contrastNow = 0;            // power saver dims the screens while asleep
+    uint8_t c = constrain(puppetBrightness(), 1, 15);
+    if(c != contrastNow) {
+      contrastNow = c;
+      for(uint8_t e = 0; e < NUM_EYES; e++) eye[e].display.sendCommand(SSD1351_CMD_CONTRASTMASTER, &c, 1);
+    }
+    if(puppetFrameDelayMs()) delay(puppetFrameDelayMs());
+    puppetUpdate(micros());                   // radar/sound behaviour, once per eye pair
+  }
+  { int16_t io = puppetIris(); if(io >= 0) iScale = io; }
 
   // X/Y movement
 
@@ -270,6 +348,16 @@ void frame( // Process motion for a single frame of left or right eye
       eyeInMotion      = true;            // Start move on next frame
     }
   }
+  bool tracked = false;
+  { // Radar gaze override: when someone is tracked the eyes follow them.
+    int16_t gx, gy;
+    if(puppetGaze(eyeIndex, &gx, &gy)) {
+      tracked = true;
+      eyeX = eyeOldX = eyeNewX = gx;            // keep autonomous state in sync so it
+      eyeY = eyeOldY = eyeNewY = gy;            // resumes smoothly when override ends
+      eyeInMotion = false; eyeMoveStartTime = t; eyeMoveDuration = 1500000;
+    }
+  }
   eyeCurX = eyeX;
   eyeCurY = eyeY;
   
@@ -277,7 +365,7 @@ void frame( // Process motion for a single frame of left or right eye
 #ifdef AUTOBLINK
   // Similar to the autonomous eye movement above -- blink start times
   // and durations are random (within ranges).
-  if((t - timeOfLastBlink) >= timeToNextBlink) { // Start new blink?
+  if(gSet.autoBlink && puppetAllowBlink() && (t - timeOfLastBlink) >= timeToNextBlink) { // Start new blink?
     timeOfLastBlink = t;
     uint32_t blinkDuration = random(36000, 72000); // ~1/28 - ~1/14 sec
     // Set up durations for both eyes (if not already winking)
@@ -308,13 +396,22 @@ void frame( // Process motion for a single frame of left or right eye
 
   // Process motion, blinking and iris scale into renderable values
 
-  // Iris scaling: remap from 0-1023 input to iris map height pixel units
-  iScale = ((IRIS_MAP_HEIGHT + 1) * 1024) /
-           (1024 - (iScale * (IRIS_MAP_HEIGHT - 1) / IRIS_MAP_HEIGHT));
+  // Iris scaling: the shared IRIS_MIN..IRIS_MAX animation is mapped onto this eye style's range
+  if(!er[eyeIndex].s) { drawEye(eyeIndex, 0, 0, 0, 0, 0); return; }
+  const EyeStyle &st = *er[eyeIndex].s;
+  int32_t iv = st.irisMin + ((int32_t)iScale - IRIS_MIN) * (st.irisMax - st.irisMin) / (IRIS_MAX - IRIS_MIN);
+  iScale = constrain(iv, 0, 1023);
 
   // Scale eye X/Y positions (0-1023) to pixel units used by drawEye()
-  eyeX = map(eyeX, 0, 1023, 0, SCLERA_WIDTH  - 128);
-  eyeY = map(eyeY, 0, 1023, 0, SCLERA_HEIGHT - 128);
+  if(tracked) {
+    // Following someone: exaggerated travel, the iris can go almost to the screen edge
+    // (further than the sclera image allows -- drawEye() repeats the sclera's edge pixels).
+    eyeX = (st.scleraW - 128) / 2 + ((int32_t)eyeX - 512) * TRACK_TRAVEL_X / 512;
+    eyeY = (st.scleraH - 128) / 2 + ((int32_t)eyeY - 512) * TRACK_TRAVEL_Y / 512;
+  } else {
+    eyeX = map(eyeX, 0, 1023, 0, st.scleraW - 128);
+    eyeY = map(eyeY, 0, 1023, 0, st.scleraH - 128);
+  }
   if (eyeIndex == 1) { // this inverts the motion of the eyes
     // eyeX = (SCLERA_WIDTH - 128) - eyeX; // Mirrored display
   }
@@ -324,7 +421,7 @@ void frame( // Process motion for a single frame of left or right eye
   // here was extracted from my posterior and not mathematically based.
   // I suppose one could get all clever with a range sensor, but for now...
   eyeX += 4;
-  if(eyeX > (SCLERA_WIDTH - 128)) eyeX = (SCLERA_WIDTH - 128);
+  if(!tracked && eyeX > (st.scleraW - 128)) eyeX = (st.scleraW - 128);
 
   // Eyelids are rendered using a brightness threshold image.  This same
   // map can be used to simplify another problem: making the upper eyelid
@@ -334,16 +431,7 @@ void frame( // Process motion for a single frame of left or right eye
   static uint8_t uThreshold = 128;
   uint8_t        lThreshold, n;
 #ifdef TRACKING
-  int16_t sampleX = SCLERA_WIDTH  / 2 - (eyeX / 2), // Reduce X influence
-          sampleY = SCLERA_HEIGHT / 2 - (eyeY + IRIS_HEIGHT / 4);
-  // Eyelid is slightly asymmetrical, so two readings are taken, averaged
-  if(sampleY < 0) n = 0;
-  else            n = (upper[sampleY][sampleX] +
-                       upper[sampleY][SCREEN_WIDTH - 1 - sampleX]) / 2;
-  uThreshold = (uThreshold * 3 + n) / 4; // Filter/soften motion
-  // Lower eyelid doesn't track the same way, but seems to be pulled upward
-  // by tension from the upper lid.
-  lThreshold = 254 - uThreshold;
+#error TRACKING is not supported with per-eye styles
 #else // No tracking -- eyelids full open unless blink modifies them
   uThreshold = lThreshold = 0;
 #endif
@@ -359,6 +447,13 @@ void frame( // Process motion for a single frame of left or right eye
     lThreshold = (lThreshold * s + 254 * (257 - s)) / 256;
   } else {
     n          = uThreshold;
+  }
+
+  // Extra lid closure from the behaviour module (sleeping, waking).
+  uint8_t lc = puppetLidClose(eyeIndex);
+  if(lc) {
+    n          = n          + ((254 - n)          * lc) / 255;
+    lThreshold = lThreshold + ((254 - lThreshold) * lc) / 255;
   }
 
   // Pass all the derived values to the eye-rendering function:
