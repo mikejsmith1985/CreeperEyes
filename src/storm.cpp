@@ -14,16 +14,15 @@ static void layout() {
   for (int r = 0; r < STORM_ROWS; r++)
     for (int c = 0; c < STORM_PER_ROW; c++) {
       int i = r * STORM_PER_ROW + (r % 2 ? STORM_PER_ROW - 1 - c : c);   // zig-zag
-      // as installed, the strip's row 1 starts on the viewer's left (checked on the real box:
-      // the candle glow landed mirrored on the right with the old 1-x mapping)
-      ledX[i] = (c + 0.5f) / STORM_PER_ROW;
+      // strip is stuck on the back wall, so seen from the front left/right is mirrored
+      ledX[i] = 1.0f - (c + 0.5f) / STORM_PER_ROW;
       ledY[i] = (r + 0.5f) / STORM_ROWS;
     }
 }
 // how much an LED lights the house windows. Layers are fitted with their bed side to the viewer,
 // so the scene is mirrored from the drawing: the house ends up left of centre, mid height.
 static float houseW(int i) {
-  float dx = (ledX[i] - 0.34f) / 0.12f, dy = (ledY[i] - 0.48f) / 0.22f;
+  float dx = (ledX[i] - 0.72f) / 0.12f, dy = (ledY[i] - 0.66f) / 0.22f;   // spot marked on the built box: LEDs 4-6 from the input side, between rows 2 and 3
   return expf(-(dx * dx + dy * dy));
 }
 
