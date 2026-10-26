@@ -19,12 +19,14 @@ static void layout() {
       ledY[i] = (r + 0.5f) / STORM_ROWS;
     }
 }
-// how much an LED lights the house windows. Layers are fitted with their bed side to the viewer,
-// so the scene is mirrored from the drawing: the house ends up left of centre, mid height.
-static float houseW(int i) {
-  float dx = (ledX[i] - 0.72f) / 0.12f, dy = (ledY[i] - 0.66f) / 0.22f;   // spot marked on the built box: LEDs 4-6 from the input side, between rows 2 and 3
+// Glow spots, placed by eye on the built box (front view: tree + moon left, house centre-right).
+// ledX runs opposite to the front view, so front x ~= 1 - ledX.
+static float spot(int i, float x, float y, float sx, float sy) {
+  float dx = (ledX[i] - x) / sx, dy = (ledY[i] - y) / sy;
   return expf(-(dx * dx + dy * dy));
 }
+static float houseW(int i) { return spot(i, 0.46f, 0.45f, 0.11f, 0.16f); }   // the lit windows
+static float moonW(int i)  { return spot(i, 0.82f, 0.84f, 0.09f, 0.14f); }   // the moon, top-left
 
 static uint8_t sc(float v) { return (uint8_t)constrain((int)v, 0, 255); }
 
@@ -76,10 +78,13 @@ static void stormTask(void *) {
     float breathe = 0.8f + 0.2f * sinf(now / 2300.0f);
     for (int i = 0; i < STORM_LEDS; i++) {
       flick[i] += ((esp_random() % 1000) / 1000.0f - flick[i]) * 0.25f;
-      float h = houseW(i);
-      float sky = glow * breathe * 26.0f * (1 - h);
+      float h = houseW(i), m = moonW(i);
+      float sky = glow * breathe * 26.0f * max(0.0f, 1 - h - m);
       float candle = glow * h * (45.0f + 25.0f * flick[i]);
-      strip.setPixelColor(i, sc(sky * 0.35f + candle), sc(sky * 0.25f + candle * 0.42f), sc(sky * 1.0f + candle * 0.05f));
+      float moon = glow * m * 75.0f;                                   // pale, slightly green-white
+      strip.setPixelColor(i, sc(sky * 0.35f + candle + moon * 0.80f),
+                             sc(sky * 0.25f + candle * 0.42f + moon * 1.00f),
+                             sc(sky * 1.0f + candle * 0.05f + moon * 0.72f));
     }
     strip.show();
     vTaskDelay(pdMS_TO_TICKS(40));
