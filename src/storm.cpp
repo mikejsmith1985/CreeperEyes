@@ -14,8 +14,9 @@ static void layout() {
   for (int r = 0; r < STORM_ROWS; r++)
     for (int c = 0; c < STORM_PER_ROW; c++) {
       int i = r * STORM_PER_ROW + (r % 2 ? STORM_PER_ROW - 1 - c : c);   // zig-zag
-      // strip is stuck on the back wall, so seen from the front left/right is mirrored
-      ledX[i] = 1.0f - (c + 0.5f) / STORM_PER_ROW;
+      // as installed, the strip's row 1 starts on the viewer's left (checked on the real box:
+      // the candle glow landed mirrored on the right with the old 1-x mapping)
+      ledX[i] = (c + 0.5f) / STORM_PER_ROW;
       ledY[i] = (r + 0.5f) / STORM_ROWS;
     }
 }
